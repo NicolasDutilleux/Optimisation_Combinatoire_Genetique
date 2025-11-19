@@ -1,70 +1,103 @@
-#include "logic_function.h"
-#include "hierarchy_and_print_utils.h"
+#include <vector>
+#include <iostream>
+#include <fstream>
+#include "Node.h"
+#include <filesystem>
+#include <string>
 
 
-int main()
+std::vector<Node> readDataset(const std::string& filename)
 {
-    // Basic Tests
-    current_folder_path();
+    // Reads the file + errors
+    std::vector<Node> node_vector;
+    std::ifstream file(filename);
 
-    std::cout << "Hello World!\n\n";
-
-    // LOAD DATA FROM NOTEBOOK
-
-    std::vector<Node> node_vector = readDataset("Datasets/51/51_data.txt");
-
-    // Create a vector 2 D that stores the distances between places
-
-    std::vector<std::vector<double>> dist = Compute_Distances_2DVector(node_vector);
-    printMatrix2D(dist);
-
-    std::vector<std::vector<double>> dist_ranking = Distance_Ranking_2DVector(dist);
-    // (1) A generation with X species
-
-    std::vector<std::vector<std::vector<int>>> species = Random_Generation(node_vector, 2, 10);
-    printSpecies(species);
-
-    for (int i = 0; i < 1000000; i++)
+    if (!file.is_open())
     {
-        // Calculate Total Cost
+        std::cerr << "Error: could not open file " << filename << std::endl;
+        return node_vector; // return empty vector
+    }
+    std::string line;
 
-        std::vector<double> cost_vector_specie = Total_Cost_Specie(3, species[0], dist);
-        if (i % 100000 == 0)
-        {
-            Print_Double_Vector(cost_vector_specie);
-        }
+    // Skip the DIMENSION line
+    std::getline(file, line);
 
-        // (2) Compute generations ; For each species, Keep X Best
-        int best_index = Select_Best(cost_vector_specie);
+    // Skip the BEGIN line
+    std::getline(file, line);
 
-        if (i % 100000 == 0)
-        {
-            std::cout << "The best one is at index [" << best_index << "] " << std::endl;
-        }
-        // (3) From the X best: Mutate with random chances
-        //Print_Individual(species[0][best_index]);
+    int id;
+    int x, y;
 
-        //std::vector<int> individual = Mutation_Swap(100, species[0][best_index]);
-        int taille = species[0].size();
+    // For each line (excluding the first): store the id, x and y in the node.
 
-        for (int i = 0; i < taille; i++)
-        {
-            if (i != best_index)
-            {
-                species[0][i] = Mutation_Swap(100, species[0][best_index]);
-            }
+    while (file >> id >> x >> y)
+    {
+        Node n;
+        n.id = id;
+        n.x = x;
+        n.y = y;
 
-        }
-
-        //Print_Specie(species[0]);
-
-        //std::cout << "kakouuuu" << std::endl;
-
-        //Print_Individual(individual);
-
-
-        // (4) Go back to square (1) OR Exit if it loops indefinetly. (Maybe store best each time in a file)
+        // Add the node to the vector
+        node_vector.push_back(n);
     }
 
+    std::cout << node_vector.size() << " nodes loaded from " << filename << std::endl;
+    // Close the file
 
+    file.close();
+
+    // Return the file
+
+    return node_vector;
+}
+
+void printMatrix2D(const std::vector<std::vector<double>>& matrix)
+{
+    std::cout << "\nMatrix2D :\n\n";
+    // int size_i = matrix.size();
+    // 
+    int size_i = 10;
+    // Iterate through rows
+    for (size_t i = 0; i < size_i; i++)
+    {
+        // Iterate through columns
+        for (size_t j = 0; j < 10; j++)//matrix[i].size(); j++)
+        {
+            std::cout << matrix[i][j] << " ";
+        }
+        std::cout << "\n"; // new line after each row
+    }
+}
+
+void current_folder_path()
+{
+    std::cout << "\n Dossier courant = "
+        << std::filesystem::current_path()
+        << std::endl << std::endl;
+}
+void printSpecies(const std::vector<std::vector<std::vector<int>>>& species)
+{
+    std::cout << "\n=== Species Overview ===\n\n";
+
+    // Loop through species
+    for (size_t i = 0; i < species.size(); i++)
+    {
+        std::cout << "Species " << i << ":\n";
+
+        // Loop through individuals inside a species
+        for (size_t j = 0; j < species[i].size(); j++)
+        {
+            std::cout << "  Individual " << j << ": ";
+
+            // Print the permutation (list of ints)
+            for (size_t k = 0; k < species[i][j].size(); k++)
+            {
+                std::cout << species[i][j][k] << " ";
+            }
+
+            std::cout << "\n";
+        }
+
+        std::cout << "\n"; // space between species
+    }
 }
