@@ -82,39 +82,44 @@ std::vector<std::vector<int>> Distance_Ranking_2DVector(std::vector<std::vector<
 }
 
 
-std::vector<std::vector<std::vector<int>>> Random_Generation(const std::vector<Node>& node_vector, int species_number, int individual_number)
+std::vector<std::vector<std::vector<int>>> Random_Generation(const std::vector<Node>& node_vector,
+    int species_number,
+    int individual_number)
 {
     std::vector<std::vector<std::vector<int>>> species(species_number);
     std::random_device rd;
     std::mt19937 rng(rd());
 
+    int station_number = node_vector.back().id;
 
-
-    int station_number = node_vector[node_vector.size() - 1].id;
+    // Construire le pool en commençant par 1
     std::vector<int> pool;
-    for (int x = 1; x <= station_number; x++)
+    pool.reserve(station_number);
+    pool.push_back(1);
+    for (int x = 2; x <= station_number; x++)
     {
         pool.push_back(x);
     }
+
     std::cout << "Size is " << pool.size() << std::endl;
+
     for (int i = 0; i < species_number; i++)
     {
         for (int j = 0; j < individual_number; j++)
         {
-
-            // Start from the full pool
+            // Copie du pool
             std::vector<int> individual = pool;
 
-            // Shuffle to get a random permutation
-            std::shuffle(individual.begin(), individual.end(), rng);
+            // Mélanger tout sauf la première position (qui reste 1)
+            std::shuffle(individual.begin() + 1, individual.end(), rng);
 
             species[i].push_back(individual);
         }
     }
 
     return species;
-
 }
+
 double Cost_station(int alpha, double distance)
 {
     double cost = alpha * distance;
@@ -231,19 +236,15 @@ void Mutation_Swap(int swapping_pourcentage, std::vector<int>& individual)
     int random_number = Random(1, 100);
     if (random_number > 100 - swapping_pourcentage)
     {
-        int number_of_mutations = Random(1, ceil(taille / 3.0));
+        int number_of_mutations = Random(1, ceil(taille / 2.0));
         int random_number_one = 0;
         int random_number_two = 0;
         for (int i = 0; i < number_of_mutations; i++)
         {
-            //std::cout << number_of_mutations << " Mutations" << std::endl;
-            //std::cout << "kakouuuu  " << taille - 1 << std::endl;
-            random_number_one = Random(0, taille - 1);
-            random_number_two = Random(0, taille - 1);
 
-            //std::cout << "kakouuuu  " << taille << " rn1 " << random_number_one << " rn2 " << random_number_two << std::endl;
-            //new_individual[random_number_one] = individual[random_number_two];
-            //new_individual[random_number_two] = individual[random_number_one];
+            random_number_one = Random(1, taille - 1); // 1 because we don't swap the depot
+            random_number_two = Random(1, taille - 1);
+
             int swap = individual[random_number_one];
             individual[random_number_one] = individual[random_number_two];
             individual[random_number_two] = swap;
@@ -263,7 +264,7 @@ void Mutation_Deletion(int deletion_pourcentage, std::vector<int>& individual)
 
 
     // Choisir un index aléatoire
-    int index = Random(0, individual.size() - 1);
+    int index = Random(1, individual.size() - 1);
 
     // Supprimer l'élément à cet index
     individual.erase(individual.begin() + index);
@@ -276,34 +277,5 @@ std::vector<int> Mutations(int deletion_pourcentage, int swapping_pourcentage, s
     Mutation_Deletion(deletion_pourcentage, new_individual);
     Mutation_Swap(swapping_pourcentage, new_individual);
     return new_individual;
-
-}
-void Print_Double_Vector(std::vector<double> cost_vector)
-{
-    std::cout << cost_vector.size() << std::endl;
-    for (int i = 0; i < cost_vector.size(); i++)
-    {
-        std::cout << "Total cost " << i << " = " << cost_vector[i] << "       " << i << "  \n";
-    }
-}
-void Print_Individual(std::vector<int>& individual)
-{
-    int taille = individual.size();
-    for (int i = 0; i < taille; i++)
-    {
-        std::cout << individual[i] << " ";
-    }
-    std::cout << std::endl;
-}
-void Print_Specie(std::vector<std::vector<int>> specie)
-{
-    int taille = specie.size();
-
-    for (int i = 0; i < taille; i++)
-    {
-        std::cout << "Individual Number [" << i << "] " << std::endl;
-        Print_Individual(specie[i]);
-    }
-
 
 }

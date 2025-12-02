@@ -101,3 +101,32 @@ void printSpecies(const std::vector<std::vector<std::vector<int>>>& species)
         std::cout << "\n"; // space between species
     }
 }
+void Print_Double_Vector(std::vector<double> cost_vector)
+{
+    std::cout << cost_vector.size() << std::endl;
+    for (int i = 0; i < cost_vector.size(); i++)
+    {
+        std::cout << "Total cost " << i << " = " << cost_vector[i] << "       " << i << "  \n";
+    }
+}
+void Print_Individual(std::vector<int>& individual)
+{
+    int taille = individual.size();
+    for (int i = 0; i < taille; i++)
+    {
+        std::cout << individual[i] << " ";
+    }
+    std::cout << std::endl;
+}
+void Print_Specie(std::vector<std::vector<int>> specie)
+{
+    int taille = specie.size();
+
+    for (int i = 0; i < taille; i++)
+    {
+        std::cout << "Individual Number [" << i << "] " << std::endl;
+        Print_Individual(specie[i]);
+    }
+
+
+}
