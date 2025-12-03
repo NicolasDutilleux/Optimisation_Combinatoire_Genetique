@@ -2,6 +2,7 @@
 #include "hierarchy_and_print_utils.h"
 
 
+
 int main()
 {
     // Basic Tests
@@ -56,7 +57,9 @@ int main()
         {
             if (i != best_index)
             {
-                species[0][i] = Mutations(5, 80, species[0][best_index]);
+                int random_index = Random(0, taille - 1);
+                species[0][i] = Order_Crossover(species[0][best_index], species[0][random_index]);
+
             }
 
         }

@@ -3,6 +3,7 @@
 #include <random>
 #include "Node.h"
 #include <iostream>
+#include <algorithm>
 
 std::vector<std::vector<double>> Compute_Distances_2DVector(const std::vector<Node>& node_vector)
 {
@@ -278,4 +279,33 @@ std::vector<int> Mutations(int deletion_pourcentage, int swapping_pourcentage, s
     Mutation_Swap(swapping_pourcentage, new_individual);
     return new_individual;
 
+}
+
+// Order Crossover (OX)
+std::vector<int> Order_Crossover(const std::vector<int>& parentA, const std::vector<int>& parentB) {
+    int taille = parentA.size();
+    std::vector<int> child(taille, -1);
+
+    // Choisir deux points de coupure
+    int cut1 = Random(1, taille - 2); // on évite la première position (dépôt)
+    int cut2 = Random(cut1 + 1, taille - 1);
+
+    // Copier le segment du parent A
+    for (int i = cut1; i <= cut2; i++) {
+        child[i] = parentA[i];
+    }
+
+    // Compléter avec les éléments du parent B
+    int currentIndex = (cut2 + 1) % taille;
+    for (int i = 0; i < taille; i++) {
+        int candidate = parentB[(cut2 + 1 + i) % taille];
+
+        // Vérifier si déjà présent
+        if (std::find(child.begin(), child.end(), candidate) == child.end()) {
+            child[currentIndex] = candidate;
+            currentIndex = (currentIndex + 1) % taille;
+        }
+    }
+
+    return child;
 }
