@@ -23,6 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="hierarchy_and_print_utils.h" />
+    <ClInclude Include="Individual.h" />
     <ClInclude Include="logic_function.h" />
     <ClInclude Include="Node.h" />
   </ItemGroup>
@@ -32,6 +33,7 @@
   <ItemGroup>
     <Text Include="Datasets\51\51_data.txt" />
     <Text Include="Datasets\51\51_sol.txt" />
+    <Text Include="ReadMe.md" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
