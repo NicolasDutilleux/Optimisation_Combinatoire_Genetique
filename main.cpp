@@ -1,88 +1,130 @@
 #include "logic_function.h"
 #include "hierarchy_and_print_utils.h"
 
-
 int main()
 {
-    // Basic Tests
+    // Affiche le dossier courant
     current_folder_path();
-
     std::cout << "Hello World!\n\n";
 
-    // LOAD DATA FROM NOTEBOOK
-
+    // 1) Chargement des données
     std::vector<Node> node_vector = readDataset("Datasets/51/51_data.txt");
+    int max_id = node_vector.back().id;
 
-	int max_id = node_vector.back().id;
-    // Create a vector 2 D that stores the distances between places
-
+    // 2) Matrice des distances + ranking
     std::vector<std::vector<double>> dist = Compute_Distances_2DVector(node_vector);
     printMatrix2D(dist);
 
     std::vector<std::vector<int>> dist_ranking = Distance_Ranking_2DVector(dist);
-    // (1) A generation with X species
 
-    std::vector<std::vector<Individual>> species = Random_Generation(node_vector, 2, 30);
-	// printSpecies(species); modify it to take Individual type
-    std::vector<double> cost_vector_specie;
-    int best_index = 0;
-    int taille = 0;
-	std::cout << "Species Printed" << std::endl;
-    for (int i = 0; i < 10000; i++)
+    // 3) Paramètres GA
+    const int NUM_SPECIES = 3;
+    const int POP_SIZE = 150;
+    const int MAX_GENERATIONS = 1000;
+    const int ALPHA = 3;
+    double MUTATION_RATE = 0.15;   // à ajuster
+    const int ELITISM = 2;
+
+    int DEL_PCT_RDM = 10;
+    int DEL_PCT_CENT = 10;
+    int SWAP_PCT = 10;
+    const int INV_PCT = 10;
+    const int SCR_PCT = 10;
+    const int INSERTSWAP_PCT = 10;
+    double old_best = 1e18;
+
+    // 4) Génération aléatoire des espèces (3 espèces)
+    std::vector<std::vector<Individual>> species =
+        Random_Generation(node_vector, NUM_SPECIES, POP_SIZE);
+
+    std::cout << "Species generated\n";
+
+    // 5) Boucle des générations
+    for (int gen = 0; gen < MAX_GENERATIONS; ++gen)
     {
-        // Calculate Total Cost
-
-        cost_vector_specie = Total_Cost_Specie(3, species[0], dist, dist_ranking);
-
-        if (i % 1000 == 0)
+        // --- Évolution de chaque espèce ---
+        for (int s = 0; s < NUM_SPECIES; ++s)
         {
-            Print_Double_Vector(cost_vector_specie);
-            Print_Individual(species[0][0]);     
-            PlotIndividualSVG(species[0][best_index], node_vector, i);   
-
+            EvolveSpecie(
+                species[s],      // la population de l'espèce s
+                dist,
+                dist_ranking,
+                node_vector,
+                ALPHA,
+                MUTATION_RATE,
+                max_id,
+                /*elitism_count*/ ELITISM,
+				DEL_PCT_RDM,
+                DEL_PCT_CENT,
+                SWAP_PCT,
+                INV_PCT,
+                SCR_PCT,
+				INSERTSWAP_PCT
+            );
         }
 
-        // (2) Compute generations ; For each species, Keep X Best
-        best_index = Select_Best(cost_vector_specie);
-
-        if (i % 1000 == 0)
+        // --- Log / visu toutes les X générations ---
+        if (gen % (MAX_GENERATIONS/100) == 0)
         {
-            std::cout << "The best one is at index [" << best_index << "] " << std::endl;
-        }
-        // (3) From the X best: Mutate with random chances
-        //Print_Individual(species[0][best_index]);
+            // On cherche le meilleur individu parmi toutes les espèces
+            double global_best_cost = 1e18;
+            int best_species = 0;
+            int best_index = 0;
 
-        //std::vector<int> individual = Mutation_Swap(100, species[0][best_index]);
-        taille = species[0].size();
-
-        for (int i = 0; i < taille; i++)
-        {
-            if (i != best_index)
+            for (int s = 0; s < NUM_SPECIES; ++s)
             {
-                species[0][i] = Mutations(
-                    /*deletion_pourcentage*/    1,
-                    /*swapping_pourcentage*/    90,
-                    /*inversion_pourcentage*/   30,
-                    /*scramble_pourcentage*/    0,
-                    /*insertswap_pourcentage*/  0,
-                    species[0][best_index],
-                    max_id,
-                    node_vector,
-                    dist);
+                std::vector<double> costs_s =
+                    Total_Cost_Specie(ALPHA, species[s], dist, dist_ranking);
 
+                int best_idx_s = Select_Best(costs_s);
+
+                if (costs_s[best_idx_s] < global_best_cost)
+                {
+                    global_best_cost = costs_s[best_idx_s];
+                    best_species = s;
+                    best_index = best_idx_s;
+                }
+
+                // (optionnel) afficher les coûts de l'aespèce 0 uniquement
+                /*if (s == 0)
+                {
+                    std::cout << "\nGeneration " << gen
+                        << " - Species 0 cost vector:\n";
+                    Print_Double_Vector(costs_s);
+                }*/
             }
 
+            std::cout << "\nGeneration " << gen
+                << " - Global best = species " << best_species
+                << ", index " << best_index
+                << ", cost = " << global_best_cost << "\n";
+
+            // Afficher le meilleur individu global (ids + mask)
+            Print_Individual(species[best_species][best_index]);
+
+            // Plot SVG en tenant compte du mask
+            PlotIndividualSVG(species[best_species][best_index],
+                node_vector,
+                gen);
+            if(global_best_cost == old_best)
+                {
+                DEL_PCT_RDM = std::min(DEL_PCT_RDM + 1, 20); // increase deletion percentage up to 50%
+                DEL_PCT_CENT= std::min(DEL_PCT_CENT - 1, 5);
+				SWAP_PCT = std::min(SWAP_PCT - 1 , 0);
+				MUTATION_RATE = std::min(MUTATION_RATE + 0.03, 0.5); // increase mutation rate up to 50%
+            }
+            else
+            {
+                DEL_PCT_RDM = std::max(DEL_PCT_RDM - 1, 5); // decrease deletion percentage down to 10%
+                DEL_PCT_CENT = std::min(DEL_PCT_CENT + 1, 20);
+				MUTATION_RATE = std::max(MUTATION_RATE - 0.01, 0.10); // decrease mutation rate down to 5%
+                SWAP_PCT = std::max(SWAP_PCT + 1 , 20);
+			}
+			old_best = global_best_cost;
         }
+        
 
-        //Print_Specie(species[0]);
-
-        //std::cout << "kakouuuu" << std::endl;
-
-        //Print_Individual(individual);
-
-
-        // (4) Go back to square (1) OR Exit if it loops indefinetly. (Maybe store best each time in a file)
     }
 
-
+    return 0;
 }

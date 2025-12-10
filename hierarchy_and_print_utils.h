@@ -200,7 +200,7 @@ void PlotIndividualSVG(const Individual& ind,
     {
         out << "<circle cx='" << SX(n.x)
             << "' cy='" << SY(n.y)
-            << "' r='4' fill='lightgray'/>\n";
+            << "' r='4' fill='brown'/>\n";
     }
 
     // === 4) Draw active path (lines) ===
