@@ -23,6 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="hierarchy_and_print_utils.h" />
+    <ClInclude Include="Individual.h" />
     <ClInclude Include="logic_function.h" />
     <ClInclude Include="Node.h" />
   </ItemGroup>

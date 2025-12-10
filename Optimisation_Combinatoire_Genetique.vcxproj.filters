@@ -29,6 +29,9 @@
     <ClInclude Include="Node.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
+    <ClInclude Include="Individual.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Optimisation_Combinatoire_Genetique.rc">

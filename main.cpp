@@ -13,6 +13,7 @@ int main()
 
     std::vector<Node> node_vector = readDataset("Datasets/51/51_data.txt");
 
+	int max_id = node_vector.back().id;
     // Create a vector 2 D that stores the distances between places
 
     std::vector<std::vector<double>> dist = Compute_Distances_2DVector(node_vector);
@@ -21,8 +22,8 @@ int main()
     std::vector<std::vector<int>> dist_ranking = Distance_Ranking_2DVector(dist);
     // (1) A generation with X species
 
-    std::vector<std::vector<std::vector<int>>> species = Random_Generation(node_vector, 2, 30);
-    printSpecies(species);
+    std::vector<std::vector<Individual>> species = Random_Generation(node_vector, 2, 30);
+	// printSpecies(species); modify it to take Individual type
     std::vector<double> cost_vector_specie;
     int best_index = 0;
     int taille = 0;
@@ -36,13 +37,15 @@ int main()
         if (i % 1000 == 0)
         {
             Print_Double_Vector(cost_vector_specie);
-            Print_Individual(species[0][0]);
+            Print_Individual(species[0][0]);     
+            PlotIndividualSVG(species[0][best_index], node_vector, i);   
+
         }
 
         // (2) Compute generations ; For each species, Keep X Best
         best_index = Select_Best(cost_vector_specie);
 
-        if (i % 10000 == 0)
+        if (i % 1000 == 0)
         {
             std::cout << "The best one is at index [" << best_index << "] " << std::endl;
         }
@@ -56,7 +59,17 @@ int main()
         {
             if (i != best_index)
             {
-                species[0][i] = Mutations(5, 80, species[0][best_index]);
+                species[0][i] = Mutations(
+                    /*deletion_pourcentage*/    1,
+                    /*swapping_pourcentage*/    90,
+                    /*inversion_pourcentage*/   30,
+                    /*scramble_pourcentage*/    0,
+                    /*insertswap_pourcentage*/  0,
+                    species[0][best_index],
+                    max_id,
+                    node_vector,
+                    dist);
+
             }
 
         }
