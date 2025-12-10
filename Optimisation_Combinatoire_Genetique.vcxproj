@@ -33,6 +33,7 @@
   <ItemGroup>
     <Text Include="Datasets\51\51_data.txt" />
     <Text Include="Datasets\51\51_sol.txt" />
+    <Text Include="ReadMe.md" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
