@@ -1,14 +1,21 @@
-#include "logic_function.h"
-#include "hierarchy_and_print_utils.h"
+#include "generation/PopulationInit.h"
+#include "utils/Distance.h"
+
+#include "evolution/EvolveSpecie.h"
+
+#include "cost/Cost.h"
+#include "genetic/Selection.h"
+
+#include "utils/hierarchy_and_print_utils.h"
+
+
 
 int main()
 {
     // Affiche le dossier courant
     current_folder_path();
-    std::cout << "Hello World!\n\n";
-
     // 1) Chargement des données
-    std::vector<Node> node_vector = readDataset("Datasets/51/51_data.txt");
+    std::vector<Node> node_vector = readDataset("data/225/225_data.txt");
     int max_id = node_vector.back().id;
 
     // 2) Matrice des distances + ranking
@@ -46,6 +53,9 @@ int main()
         // --- Évolution de chaque espèce ---
         for (int s = 0; s < NUM_SPECIES; ++s)
         {
+            
+
+            
             EvolveSpecie(
                 species[s],      // la population de l'espèce s
                 dist,
@@ -61,8 +71,12 @@ int main()
                 INV_PCT,
                 SCR_PCT,
 				INSERTSWAP_PCT,
-                mating_pool_size
+                mating_pool_size,
+                true
             );
+            
+            
+
         }
 
         // --- Log / visu toutes les X générations ---

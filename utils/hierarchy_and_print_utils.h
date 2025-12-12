@@ -1,10 +1,10 @@
 ﻿#include <vector>
 #include <iostream>
 #include <fstream>
-#include "Node.h"
+#include "core/Node.h"
 #include <filesystem>
 #include <string>
-#include "Individual.h"
+#include "core/Individual.h"
 
 std::vector<Node> readDataset(const std::string& filename)
 {

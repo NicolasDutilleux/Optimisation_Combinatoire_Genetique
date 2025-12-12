@@ -19,21 +19,47 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="hierarchy_and_print_utils.h" />
-    <ClInclude Include="Individual.h" />
-    <ClInclude Include="logic_function.h" />
-    <ClInclude Include="Node.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="Optimisation_Combinatoire_Genetique.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="Datasets\51\51_data.txt" />
-    <Text Include="Datasets\51\51_sol.txt" />
+    <Text Include="data\100\100_data.txt" />
+    <Text Include="data\100\100_sol.txt" />
+    <Text Include="data\127\127_data.txt" />
+    <Text Include="data\127\127_sol.txt" />
+    <Text Include="data\225\225_data.txt" />
+    <Text Include="data\225\225_sol.txt" />
+    <Text Include="data\51\51_data.txt" />
+    <Text Include="data\51\51_sol.txt" />
     <Text Include="ReadMe.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="core\Individual.h" />
+    <ClInclude Include="core\Node.h" />
+    <ClInclude Include="cost\Cost.h" />
+    <ClInclude Include="evolution\EvolveSpecie.h" />
+    <ClInclude Include="generation\PopulationInit.h" />
+    <ClInclude Include="genetic\Crossover.h" />
+    <ClInclude Include="genetic\Mutation.h" />
+    <ClInclude Include="genetic\Selection.h" />
+    <ClInclude Include="local_search\MaskLocalSearch.h" />
+    <ClInclude Include="local_search\TwoOpt.h" />
+    <ClInclude Include="logic_function.h" />
+    <ClInclude Include="utils\Distance.h" />
+    <ClInclude Include="utils\hierarchy_and_print_utils.h" />
+    <ClInclude Include="utils\Random.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="cost\Cost.cpp" />
+    <ClCompile Include="evolution\EvolveSpecie.cpp" />
+    <ClCompile Include="generation\PopulationInit.cpp" />
+    <ClCompile Include="genetic\Crossover.cpp" />
+    <ClCompile Include="genetic\Mutation.cpp" />
+    <ClCompile Include="genetic\Selection.cpp" />
+    <ClCompile Include="local_search\MaskLocalSearch.cpp" />
+    <ClCompile Include="local_search\TwoOpt.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="utils\Distance.cpp" />
+    <ClCompile Include="utils\Random.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -120,6 +146,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>.</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

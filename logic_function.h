@@ -1,8 +1,8 @@
 ﻿#include <vector>
 #include <cmath>
 #include <random>
-#include "Node.h"
-#include "Individual.h"
+#include "core/Node.h"
+#include "core/Individual.h"
 #include <iostream>
 #include <chrono>
 
