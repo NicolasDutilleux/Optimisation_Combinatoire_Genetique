@@ -4,6 +4,10 @@
 #include "Node.h"
 #include "Individual.h"
 #include <iostream>
+#include <chrono>
+
+using Clock = std::chrono::high_resolution_clock;
+using TimePoint = Clock::time_point;
 
 // ------------------- //
 // Utility Functions //
@@ -214,6 +218,19 @@ int Find_Nearest_Station(int city_id,
 
     return -1; // aucun actif trouvé (ne devrait pas arriver si au moins une station active)
 }
+std::vector<int> Assign_Stations(int number_of_stations, const std::vector<bool>& mask, const std::vector<std::vector<double>>& dist, const std::vector<std::vector<int>>& ranking_vector)
+{
+	std::vector<int> assignment;
+    for (int s = 1; s <= number_of_stations; ++s) {
+        if (!mask[s - 1]) {
+            int nearest_station_id = Find_Nearest_Station(s, mask, ranking_vector);
+            assignment.push_back(s);
+            assignment.push_back(nearest_station_id);
+        }
+    }
+	return assignment;
+    
+}
 // Coût de l’anneau seulement (stations actives, ordre donné par perm)
 inline double RingCostOnly(
     int alpha,
@@ -257,14 +274,14 @@ inline double OutRingCostOnly(
     int alpha,
     const std::vector<bool>& mask,
     const std::vector<std::vector<double>>& dist,
-    const std::vector<std::vector<int>>& ranking)
+    const std::vector<std::vector<int>>& ranking_vector)
 {
     int number_of_stations = static_cast<int>(dist.size());
     double total_cost = 0.0;
 
     for (int s = 1; s <= number_of_stations; ++s) {
         if (!mask[s - 1]) {
-            int nearest_station_id = Find_Nearest_Station(s, mask, ranking);
+            int nearest_station_id = Find_Nearest_Station(s, mask, ranking_vector);
             double distance_station = dist[s - 1][nearest_station_id - 1];
             total_cost += Cost_out_ring(alpha, distance_station);
         }
@@ -1067,7 +1084,12 @@ inline std::vector<bool> Mask_Crossover(const std::vector<bool>& m1,
 
     return child;
 }
-
+inline int PickParentIndex(const std::vector<int>& mating_pool, int mating_pool_size)
+{
+    // pick in [0, mating_pool_size - 1]
+    int pos = RandInt(0, mating_pool_size - 1);
+    return mating_pool[pos];
+}
 inline void EvolveSpecie(std::vector<Individual>& specie,
     const std::vector<std::vector<double>>& dist,
     const std::vector<std::vector<int>>& ranking,
@@ -1081,28 +1103,43 @@ inline void EvolveSpecie(std::vector<Individual>& specie,
     int SWAP_PCT = 10,
     const int INV_PCT = 10,
     const int SCR_PCT = 10,
-    const int INSERTSWAP_PCT = 10)
+    const int INSERTSWAP_PCT = 10,
+    int max_mating_pool_size = 0.5
+    )
 {
     int popsize = static_cast<int>(specie.size());
     if (popsize <= 1) return;
 
+    TimePoint start_time = Clock::now();
     // --- 1) Compute costs for the whole specie ---
     std::vector<double> costs = Total_Cost_Specie(alpha,
         specie,
         dist,
         ranking);
-
+    auto end_time = Clock::now(); // Capture the end time
+    auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    // Print the result
+    std::cout << "Code block executed [Total_Cost_Specie] " << duration_ms.count() << " ms\n";
     // --- 2) Sort indices by increasing cost (best first) ---
-    std::vector<int> indices(popsize);
-    for (int i = 0; i < popsize; ++i) indices[i] = i;
+    start_time = Clock::now();
+    std::vector<std::pair<double, int>> cost_index(popsize);
 
-    std::sort(indices.begin(), indices.end(),
-        [&](int a, int b) { return costs[a] < costs[b]; });
+    for (int i = 0; i < popsize; i++)
+        cost_index[i] = { costs[i], i };  // (cost, index)
+
+    std::sort(cost_index.begin(), cost_index.end());  // sorts by cost automatically
+
+    // Extract sorted indices
+    std::vector<int> indices(popsize);
+    for (int i = 0; i < popsize; i++)
+        indices[i] = cost_index[i].second;
+
 
     // --- 3) Build new population container ---
     std::vector<Individual> new_pop;
     new_pop.reserve(popsize);
 
+	
     // (a) Elitism: copy the best 'elitism_count' individuals as-is
     int elite = std::min(elitism_count, popsize);
     for (int e = 0; e < elite; ++e)
@@ -1111,8 +1148,7 @@ inline void EvolveSpecie(std::vector<Individual>& specie,
     }
 
     // (b) Build mating pool = the best 'mating_pool_size' individuals
-    //    You can tune this ratio; here: top 30% of the population, at least 2.
-    int mating_pool_size = std::max(2, static_cast<int>(0.5 * popsize));
+    int mating_pool_size = std::max(2, static_cast<int>(max_mating_pool_size * popsize));
     if (mating_pool_size > popsize) mating_pool_size = popsize;
 
     std::vector<int> mating_pool(mating_pool_size);
@@ -1121,19 +1157,19 @@ inline void EvolveSpecie(std::vector<Individual>& specie,
         mating_pool[i] = indices[i]; // indices of best individuals
     }
 
-    auto pick_parent_index = [&]() -> int
-        {
-            int pos = RandInt(0, mating_pool_size - 1); // pick in [0, mating_pool_size-1]
-            return mating_pool[pos];                    // return index in 'specie'
-        };
+    
+    end_time = Clock::now(); // Capture the end time
+    duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    // Print the result
+    std::cout << "Code block executed [Before_Mating] " << duration_ms.count() << " ms\n";
 
-
+    start_time = Clock::now();
     // --- 5) Fill the rest of the population ---
     while (static_cast<int>(new_pop.size()) < popsize)
     {
         // Parents chosen ONLY among the best 'mating_pool_size' individuals
-        int i1 = pick_parent_index();
-        int i2 = pick_parent_index();
+        int i1 = PickParentIndex(mating_pool, mating_pool_size);
+        int i2 = PickParentIndex(mating_pool, mating_pool_size);
 
         const Individual& p1 = specie[i1];
         const Individual& p2 = specie[i2];
@@ -1146,7 +1182,7 @@ inline void EvolveSpecie(std::vector<Individual>& specie,
             Mask_Crossover(p1.mask, p2.mask, /*min_active*/ 2);
 
         Individual child;
-        child.ids = std::move(child_ids);
+		child.ids = std::move(child_ids); // basically change the pointer at the place of copying. Apparently faster that's waht tehy said.
         child.mask = std::move(child_mask);
 
         // Mutation decision:
@@ -1173,6 +1209,12 @@ inline void EvolveSpecie(std::vector<Individual>& specie,
         new_pop.push_back(std::move(child));
     }
 
+    end_time = Clock::now(); // Capture the end time
+    duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    // Print the result
+    std::cout << "Code block executed [After_Mating] " << duration_ms.count() << " ms\n";
+
+    start_time = Clock::now();
     // --- 5.5) Optional: local search on mask for the best of this specie ---
     int best_idx = 0;
     double best_cost = 1e18;
@@ -1189,8 +1231,13 @@ inline void EvolveSpecie(std::vector<Individual>& specie,
             best_idx = i;
         }
     }
-
+    end_time = Clock::now(); // Capture the end time
+    duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    // Print the result
+    std::cout << "Code block executed [After_Local_Search] " << duration_ms.count() << " ms\n";
     // Hill climber sur le mask du meilleur de l'espèce
+    start_time = Clock::now();
+
     ImproveMaskLocal(new_pop[best_idx],
         alpha,
         max_station_id,
@@ -1198,6 +1245,10 @@ inline void EvolveSpecie(std::vector<Individual>& specie,
         ranking);
     // --- 6) Replace old specie by the new one ---
     specie.swap(new_pop);
+    end_time = Clock::now(); // Capture the end time
+    duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    // Print the result
+    std::cout << "Code block executed [After_Improve_Local_Mask] " << duration_ms.count() << " ms\n";
 }
 
 

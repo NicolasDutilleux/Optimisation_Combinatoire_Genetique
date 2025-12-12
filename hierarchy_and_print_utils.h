@@ -148,7 +148,8 @@ void Print_Individual(const Individual& ind)
 }*/
 void PlotIndividualSVG(const Individual& ind,
     const std::vector<Node>& node_vector,
-    int generation)
+    int generation,
+    std::vector<int> assignement)
 {
     // Ensure folder exists
     std::filesystem::create_directories("Images");
@@ -214,6 +215,16 @@ void PlotIndividualSVG(const Individual& ind,
             out << "<line x1='" << SX(a.x) << "' y1='" << SY(a.y)
                 << "' x2='" << SX(b.x) << "' y2='" << SY(b.y)
                 << "' stroke='red' stroke-width='2'/>\n";
+        }
+        int taille = assignement.size();
+        for (int i = 0; i < taille; i += 2)
+        {
+            const Node& a = node_vector[assignement[i] - 1];
+            const Node& b = node_vector[assignement[i + 1] - 1];
+
+            out << "<line x1='" << SX(a.x) << "' y1='" << SY(a.y)
+                << "' x2='" << SX(b.x) << "' y2='" << SY(b.y)
+                << "' stroke='blue' stroke-width='2'/>\n";
         }
 
         // close loop : last -> first

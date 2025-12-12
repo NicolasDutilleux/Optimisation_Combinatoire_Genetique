@@ -21,7 +21,7 @@ int main()
     const int NUM_SPECIES = 3;
     const int POP_SIZE = 150;
     const int MAX_GENERATIONS = 1000;
-    const int ALPHA = 3;
+    const int ALPHA = 5;
     double MUTATION_RATE = 0.15;   // à ajuster
     const int ELITISM = 2;
 
@@ -32,7 +32,8 @@ int main()
     const int SCR_PCT = 10;
     const int INSERTSWAP_PCT = 10;
     double old_best = 1e18;
-
+	int mating_pool_size = 0.5;
+    
     // 4) Génération aléatoire des espèces (3 espèces)
     std::vector<std::vector<Individual>> species =
         Random_Generation(node_vector, NUM_SPECIES, POP_SIZE);
@@ -59,12 +60,13 @@ int main()
                 SWAP_PCT,
                 INV_PCT,
                 SCR_PCT,
-				INSERTSWAP_PCT
+				INSERTSWAP_PCT,
+                mating_pool_size
             );
         }
 
         // --- Log / visu toutes les X générations ---
-        if (gen % (MAX_GENERATIONS/100) == 0)
+        if (gen % (MAX_GENERATIONS / 100) == 0)
         {
             // On cherche le meilleur individu parmi toutes les espèces
             double global_best_cost = 1e18;
@@ -102,10 +104,14 @@ int main()
             // Afficher le meilleur individu global (ids + mask)
             Print_Individual(species[best_species][best_index]);
 
+            std::vector<int> assignement = Assign_Stations(max_id,
+                species[best_species][best_index].mask,
+                dist,
+				dist_ranking);
             // Plot SVG en tenant compte du mask
             PlotIndividualSVG(species[best_species][best_index],
                 node_vector,
-                gen);
+                gen, assignement);
             if(global_best_cost == old_best)
                 {
                 DEL_PCT_RDM = std::min(DEL_PCT_RDM + 1, 20); // increase deletion percentage up to 50%
@@ -125,6 +131,8 @@ int main()
         
 
     }
+
+	
 
     return 0;
 }
