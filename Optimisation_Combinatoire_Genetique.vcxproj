@@ -59,6 +59,7 @@
     <ClCompile Include="utils\Random.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="CHANGES.md" />
     <None Include="COMPLETION_CHECKLIST.md" />
     <None Include="DETAILED_CHANGES.md" />
     <None Include="FINAL_SUMMARY.md" />

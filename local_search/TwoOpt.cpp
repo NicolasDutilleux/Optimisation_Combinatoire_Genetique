@@ -2,7 +2,9 @@
 #include "cost/Cost.h"
 #include <algorithm>
 #include <cmath>
-#include <iostream>
+
+// Extern for pre-computed distances
+extern double Get_Distance(int i, int j);
 
 void TwoOptImproveAlpha(
     Individual& ind,
@@ -26,6 +28,7 @@ void TwoOptImproveAlpha(
         int best_i = -1;
         int best_j = -1;
 
+        // OPTIMIZED: Limit checks to first 1/3 of ring
         int check_limit = std::max(3, m / 3);
 
         for (int i = 0; i < check_limit && i < m - 2; ++i)

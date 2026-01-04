@@ -16,7 +16,7 @@ int main()
     
     // Load dataset
     std::cout << "[MAIN] Loading dataset...\n";
-    std::vector<Node> node_vector = readDataset("data/51/51_data.txt");
+    std::vector<Node> node_vector = readDataset("data/225/225_data.txt");
     int total_stations = static_cast<int>(node_vector.size());
 
     if (total_stations == 0)
@@ -41,17 +41,17 @@ int main()
     auto rank_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_rank - start_rank).count();
     std::cout << "[MAIN] Distance ranking computed in " << rank_time << "ms\n";
 
-    // GA parameters
+    // GA parameters - TUNED FOR PERFORMANCE
     const int NUM_SPECIES = 3;
-    const int POP_SIZE = 20;
-    const int MAX_GENERATIONS = 100000;
+    const int POP_SIZE = 100;          // Increased from 20 for better quality
+    const int MAX_GENERATIONS = 10000; // Reduced from 100,000 for reasonable runtime
     const int ALPHA = 3;
-    double MUTATION_RATE = 0.15;
-    const int ELITISM = 2;
+    double MUTATION_RATE = 0.20;       // Slightly increased for exploration
+    const int ELITISM = 3;
 
-    int ADD_PCT = 15;
-    int REMOVE_PCT = 10;
-    int SWAP_PCT = 10;
+    int ADD_PCT = 20;     // Increased for larger exploration
+    int REMOVE_PCT = 15;
+    int SWAP_PCT = 15;
     const int INV_PCT = 10;
     const int SCR_PCT = 10;
     double old_best = 1e18;
@@ -66,9 +66,11 @@ int main()
     std::cout << "[MAIN] Species initialized in " << init_time << "ms\n";
 
     std::cout << "[MAIN] Starting evolution loop...\n";
-    std::cout << std::flush;
 
     // Main evolution loop
+    int stagnation_count = 0;
+    const int STAGNATION_LIMIT = 1000;  // Stop if no improvement for 1000 generations
+    
     for (int gen = 0; gen < MAX_GENERATIONS; ++gen)
     {
         // Evolve each species
@@ -91,8 +93,8 @@ int main()
                 0.5);
         }
 
-        // Detailed log every 100 generations
-        if (gen % 100 == 0 && gen > 0)
+        // Log every 500 generations (reduced from 100)
+        if (gen % 500 == 0 && gen > 0)
         {
             std::cout << "\n" << std::string(70, '=') << "\n";
             std::cout << "GENERATION " << std::setw(6) << gen << " REPORT\n";
@@ -129,27 +131,7 @@ int main()
                 std::cout << "\n[SPECIES " << s << "]\n";
                 std::cout << "  Best Cost:     " << std::fixed << std::setprecision(2) << best_cost_s << "\n";
                 std::cout << "  Avg Cost:      " << std::fixed << std::setprecision(2) << avg_cost << "\n";
-                std::cout << "  Min Cost:      " << std::fixed << std::setprecision(2) << min_cost << "\n";
-                std::cout << "  Max Cost:      " << std::fixed << std::setprecision(2) << max_cost << "\n";
                 std::cout << "  Ring Size:     " << best_ind.active_ring.size() << "/" << total_stations << "\n";
-                std::cout << "  Ring IDs:      ";
-                
-                // Print first 20 ring IDs
-                int count = 0;
-                for (int id : best_ind.active_ring)
-                {
-                    if (count < 20)
-                    {
-                        std::cout << id << " ";
-                        count++;
-                    }
-                    else
-                    {
-                        std::cout << "...";
-                        break;
-                    }
-                }
-                std::cout << "\n";
 
                 if (best_cost_s < global_best_cost)
                 {
@@ -162,30 +144,24 @@ int main()
             std::cout << "\n[GLOBAL BEST]\n";
             std::cout << "  Cost:          " << std::fixed << std::setprecision(2) << global_best_cost << "\n";
             std::cout << "  Species:       " << best_species_global << "\n";
-            std::cout << "  Ring Size:     " << species[best_species_global][best_index_global].active_ring.size() << "\n";
-            std::cout << "\n[PARAMETERS]\n";
-            std::cout << "  Mutation Rate: " << std::fixed << std::setprecision(3) << MUTATION_RATE << "\n";
-            std::cout << "  Add %:         " << ADD_PCT << "\n";
-            std::cout << "  Remove %:      " << REMOVE_PCT << "\n";
             std::cout << std::string(70, '=') << "\n\n";
 
-            // Adaptive parameter tuning
-            if (global_best_cost == old_best)
+            // Check for improvement
+            if (global_best_cost < old_best)
             {
-                ADD_PCT = std::min(ADD_PCT + 1, 25);
-                REMOVE_PCT = std::min(REMOVE_PCT + 1, 20);
-                MUTATION_RATE = std::min(MUTATION_RATE + 0.01, 0.4);
-                std::cout << "  [STATUS] Stagnant - Increasing mutation parameters\n";
+                stagnation_count = 0;
+                std::cout << "  [NEW BEST] Cost improved!\n\n";
             }
             else
             {
-                ADD_PCT = std::max(ADD_PCT - 1, 5);
-                REMOVE_PCT = std::max(REMOVE_PCT - 1, 5);
-                MUTATION_RATE = std::max(MUTATION_RATE - 0.01, 0.05);
-                std::cout << "  [STATUS] Improving - Decreasing mutation parameters\n";
+                stagnation_count++;
+                if (stagnation_count > 2)  // Stop after 2 reports without improvement (~1000 gens)
+                {
+                    std::cout << "  [STAGNATION] Stopping early...\n\n";
+                    break;
+                }
             }
             old_best = global_best_cost;
-            std::cout << std::flush;
         }
     }
 

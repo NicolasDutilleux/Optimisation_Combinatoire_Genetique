@@ -6,8 +6,7 @@
 #include "local_search/TwoOpt.h"
 #include "utils/Random.h"
 #include <algorithm>
-#include <iostream>
-#include <chrono>
+#include <thread>
 
 void EvolveSpecie(
     std::vector<Individual>& specie,
@@ -28,8 +27,15 @@ void EvolveSpecie(
     int popsize = static_cast<int>(specie.size());
     if (popsize <= 1) return;
 
-    // 1) Evaluate all individuals
-    std::vector<double> costs = Total_Cost_Specie(alpha, specie, total_stations, dist, ranking);
+    // 1) Evaluate all individuals (use cached_cost when available)
+    std::vector<double> costs(popsize);
+    for (int i = 0; i < popsize; ++i)
+    {
+        if (specie[i].cached_cost < 1e17) costs[i] = specie[i].cached_cost;
+        else costs[i] = Total_Cost_Individual(alpha, specie[i], total_stations, dist, ranking);
+        // store cached value
+        specie[i].cached_cost = costs[i];
+    }
 
     // 2) Sort by cost
     std::vector<std::pair<double, int>> cost_index(popsize);
@@ -48,7 +54,18 @@ void EvolveSpecie(
 
     int elite = std::min(elitism_count, popsize);
     for (int e = 0; e < elite; ++e)
-        new_pop.push_back(specie[sorted_indices[e]]);
+    {
+        Individual elite_ind = specie[sorted_indices[e]];
+        elite_ind.cached_cost = costs[sorted_indices[e]];
+        new_pop.push_back(std::move(elite_ind));
+    }
+
+    int need = popsize - static_cast<int>(new_pop.size());
+    if (need <= 0)
+    {
+        specie.swap(new_pop);
+        return;
+    }
 
     // 4) Build mating pool
     int mating_pool_size = std::max(2, static_cast<int>(mating_pool_fraction * popsize));
@@ -58,8 +75,10 @@ void EvolveSpecie(
     for (int i = 0; i < mating_pool_size; ++i)
         mating_pool[i] = sorted_indices[i];
 
-    // 5) Fill rest of population via crossover & mutation
-    while (static_cast<int>(new_pop.size()) < popsize)
+    // 5) Generate children (lightweight: no 2-opt, no cost yet)
+    std::vector<Individual> children;
+    children.reserve(need);
+    while (static_cast<int>(children.size()) < need)
     {
         int i1 = mating_pool[RandInt(0, mating_pool_size - 1)];
         int i2 = mating_pool[RandInt(0, mating_pool_size - 1)];
@@ -71,6 +90,7 @@ void EvolveSpecie(
 
         Individual child;
         child.active_ring = std::move(child_ring);
+        child.cached_cost = 1e18; // mark unevaluated
 
         bool force_mutation = (child.active_ring == p1.active_ring || 
                                child.active_ring == p2.active_ring);
@@ -80,14 +100,41 @@ void EvolveSpecie(
             child = Mutations(add_percentage, remove_percentage,
                               swap_percentage, inversion_percentage, scramble_percentage,
                               child, total_stations, dist);
+            child.cached_cost = 1e18;
         }
 
-        // OPTIMIZATION: Apply 2-opt to ALL children (not just 20%)
-        // because it's now fast with limited iterations
-        TwoOptImproveAlpha(child, alpha, dist, ranking);
-
-        new_pop.push_back(std::move(child));
+        children.push_back(std::move(child));
     }
+
+    // 6) Improve children in parallel (TwoOpt + cost eval)
+    unsigned int hw = std::thread::hardware_concurrency();
+    if (hw == 0) hw = 4;
+    int threads = std::min<unsigned int>(hw, children.size());
+    int chunk = (static_cast<int>(children.size()) + threads - 1) / threads;
+
+    std::vector<std::thread> workers;
+    workers.reserve(threads);
+
+    for (int t = 0; t < threads; ++t)
+    {
+        int start = t * chunk;
+        int end = std::min((int)children.size(), start + chunk);
+        workers.emplace_back([&, start, end]() {
+            for (int i = start; i < end; ++i)
+            {
+                // Local search
+                TwoOptImproveAlpha(children[i], alpha, dist, ranking);
+                // Evaluate cost
+                double c = Total_Cost_Individual(alpha, children[i], total_stations, dist, ranking);
+                children[i].cached_cost = c;
+            }
+        });
+    }
+    for (auto& w : workers) if (w.joinable()) w.join();
+
+    // 7) Append children to new population
+    for (auto& ch : children)
+        new_pop.push_back(std::move(ch));
 
     specie.swap(new_pop);
 }

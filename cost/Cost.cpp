@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <unordered_set>
+#include <thread>
 
 double Cost_station(int alpha, double distance)
 {
@@ -37,7 +37,6 @@ double RingCostOnly(int alpha,
     return cost;
 }
 
-// OPTIMIZED: Pre-compute ring membership instead of nested loop
 double OutRingCostOnly(int alpha,
     int total_stations,
     const std::vector<int>& active_ring,
@@ -46,7 +45,6 @@ double OutRingCostOnly(int alpha,
 {
     if (dist.empty() || ranking_vector.empty()) return 0.0;
     
-    // OPTIMIZATION: Use vector<bool> O(1) lookup instead of nested loop O(M)
     std::vector<bool> is_active(total_stations + 1, false);
     for (int ring_id : active_ring)
     {
@@ -58,9 +56,18 @@ double OutRingCostOnly(int alpha,
 
     for (int s = 1; s <= total_stations; ++s)
     {
-        if (!is_active[s])  // O(1) instead of O(M) nested loop
+        if (!is_active[s])
         {
-            int nearest = Find_Nearest_Station(s, active_ring, ranking_vector);
+            const std::vector<int>& row = ranking_vector[s - 1];
+            int nearest = -1;
+            for (int cand : row)
+            {
+                if (cand >= 1 && cand <= total_stations && is_active[cand])
+                {
+                    nearest = cand;
+                    break;
+                }
+            }
             if (nearest > 0 && s <= (int)dist.size() && nearest <= (int)dist.size())
                 total += Cost_out_ring(alpha, dist[s - 1][nearest - 1]);
         }
@@ -87,10 +94,38 @@ std::vector<double> Total_Cost_Specie(int alpha,
     int popsize = static_cast<int>(specie.size());
     std::vector<double> costs(popsize);
 
-    for (int i = 0; i < popsize; ++i)
+    // Parallel evaluation using threads
+    unsigned int hw = std::thread::hardware_concurrency();
+    if (hw == 0) hw = 4;
+    int threads = std::min<unsigned int>(hw, popsize);
+    int chunk = (popsize + threads - 1) / threads;
+
+    std::vector<std::thread> workers;
+    workers.reserve(threads);
+
+    for (int t = 0; t < threads; ++t)
     {
-        costs[i] = Total_Cost_Individual(alpha, specie[i], total_stations, dist, ranking);
+        int start = t * chunk;
+        int end = std::min(popsize, start + chunk);
+        workers.emplace_back([&, start, end]() {
+            for (int i = start; i < end; ++i)
+            {
+                if (specie[i].cached_cost < 1e17)
+                {
+                    costs[i] = specie[i].cached_cost;
+                }
+                else
+                {
+                    double c = Total_Cost_Individual(alpha, specie[i], total_stations, dist, ranking);
+                    specie[i].cached_cost = c;
+                    costs[i] = c;
+                }
+            }
+        });
     }
+
+    for (auto& w : workers) if (w.joinable()) w.join();
+
     return costs;
 }
 

@@ -11,24 +11,31 @@ std::vector<std::vector<Individual>> Random_Generation(
 
     int total_stations = static_cast<int>(node_vector.size());
 
+    // Limit initial ring size to avoid huge rings on large datasets
+    int max_initial_ring = std::min(20, std::max(3, total_stations / 5));
+
     for (int i = 0; i < species_number; ++i)
     {
         for (int j = 0; j < individual_number; ++j)
         {
             Individual ind;
 
-            // Create a random ring with 3 to total_stations active stations
-            int ring_size = RandInt(3, total_stations);
+            // Create a random ring with 3 to max_initial_ring active stations
+            int ring_size = RandInt(3, std::min(max_initial_ring, total_stations));
 
-            // Shuffle all station IDs
+            // Shuffle all station IDs but always include depot (1)
             std::vector<int> all_ids;
-            for (int s = 1; s <= total_stations; ++s)
+            for (int s = 2; s <= total_stations; ++s)
                 all_ids.push_back(s);
 
             std::shuffle(all_ids.begin(), all_ids.end(), GLOBAL_RNG());
 
-            // Keep the first ring_size stations
-            ind.active_ring.assign(all_ids.begin(), all_ids.begin() + ring_size);
+            ind.active_ring.clear();
+            ind.active_ring.push_back(1); // ensure depot present at start
+
+            // Fill up to ring_size (including depot)
+            for (int k = 0; k < ring_size - 1 && k < (int)all_ids.size(); ++k)
+                ind.active_ring.push_back(all_ids[k]);
 
             species[i].push_back(std::move(ind));
         }

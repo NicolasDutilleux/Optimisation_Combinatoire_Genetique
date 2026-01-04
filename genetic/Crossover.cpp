@@ -12,7 +12,7 @@ std::vector<int> Order_Crossover(const std::vector<int>& parentA, const std::vec
     int cut1 = RandInt(1, n - 2);
     int cut2 = RandInt(cut1 + 1, n - 1);
 
-    // OPTIMIZATION: Use unordered_set for O(1) membership checking instead of O(n) nested loop
+    // OPTIMIZED: Use unordered_set for O(1) membership checking
     std::unordered_set<int> child_set;
     for (int i = cut1; i <= cut2; ++i)
     {
@@ -24,7 +24,7 @@ std::vector<int> Order_Crossover(const std::vector<int>& parentA, const std::vec
     for (int i = 0; i < n; ++i)
     {
         int candidate = parentB[(cut2 + 1 + i) % n];
-        if (child_set.count(candidate) == 0)  // O(1) instead of O(n) loop
+        if (child_set.count(candidate) == 0)
         {
             child[idx] = candidate;
             child_set.insert(candidate);
@@ -99,19 +99,16 @@ std::vector<int> Slice_Crossover(
     if (m == 0) return parentA;
     if (m == 1) return parentA;
 
-    // Find max ID to size the used vector correctly
     int max_id = 0;
     for (int id : parentA) if (id > max_id) max_id = id;
     for (int id : parentB) if (id > max_id) max_id = id;
 
-    if (max_id <= 0) return parentA; // Safety check
+    if (max_id <= 0) return parentA;
 
-    // Pick two random cut points
     int cut1 = RandInt(0, m - 1);
     int cut2 = RandInt(0, m - 1);
     if (cut1 > cut2) std::swap(cut1, cut2);
 
-    // Slice from parentA [cut1..cut2]
     std::vector<int> child;
     std::vector<bool> used(max_id + 1, false);
 
@@ -122,7 +119,6 @@ std::vector<int> Slice_Crossover(
             used[parentA[i]] = true;
     }
 
-    // Fill from parentB (skip those already used)
     for (int id : parentB)
     {
         if (id > 0 && id <= max_id && !used[id])

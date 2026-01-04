@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <unordered_set>
 
+// Store globally for fast access
+static std::vector<std::vector<double>> g_dist_matrix;
+
 std::vector<std::vector<double>>
 Compute_Distances_2DVector(const std::vector<Node>& node_vector)
 {
@@ -11,14 +14,28 @@ Compute_Distances_2DVector(const std::vector<Node>& node_vector)
 
     for (int i = 0; i < n; ++i)
     {
-        for (int j = 0; j < n; ++j)
+        dist[i][i] = 0.0;
+        for (int j = i + 1; j < n; ++j)
         {
             double dx = node_vector[i].x - node_vector[j].x;
             double dy = node_vector[i].y - node_vector[j].y;
-            dist[i][j] = std::sqrt(dx * dx + dy * dy);
+            double d = std::sqrt(dx * dx + dy * dy);
+            dist[i][j] = d;
+            dist[j][i] = d;
         }
     }
+    
+    // Cache globally for fast O(1) access
+    g_dist_matrix = dist;
     return dist;
+}
+
+// Fast distance lookup using pre-computed matrix
+double Get_Distance(int i, int j)
+{
+    if (i < 0 || j < 0 || i >= (int)g_dist_matrix.size() || j >= (int)g_dist_matrix.size())
+        return 1e18;
+    return g_dist_matrix[i][j];
 }
 
 std::vector<std::vector<int>>
@@ -31,15 +48,17 @@ Distance_Ranking_2DVector(std::vector<std::vector<double>> distance_vector)
 
     for (int i = 0; i < n; ++i)
     {
-        // Create pairs of (distance, id) for efficient sorting
-        std::vector<std::pair<double, int>> dist_id(n);
+        std::vector<std::pair<double, int>> dist_id;
+        dist_id.reserve(n);
         for (int j = 0; j < n; ++j)
         {
-            dist_id[j] = { distance_vector[i][j], j + 1 };
+            dist_id.emplace_back(distance_vector[i][j], j + 1);
         }
 
-        // OPTIMIZATION: Use std::sort (O(n log n)) instead of Bubble_Sort (O(n²))
-        std::sort(dist_id.begin(), dist_id.end());
+        std::sort(dist_id.begin(), dist_id.end(), [](const auto& a, const auto& b){
+            if (a.first != b.first) return a.first < b.first;
+            return a.second < b.second;
+        });
 
         for (int j = 0; j < n; ++j)
             ranking[i][j] = dist_id[j].second;
@@ -48,7 +67,6 @@ Distance_Ranking_2DVector(std::vector<std::vector<double>> distance_vector)
     return ranking;
 }
 
-// OPTIMIZED: Use set lookup instead of nested loop
 int Find_Nearest_Station(int city_id,
     const std::vector<int>& active_ring,
     const std::vector<std::vector<int>>& ranking_vector)
@@ -58,9 +76,7 @@ int Find_Nearest_Station(int city_id,
     if (active_ring.empty())
         return -1;
 
-    // Create a fast lookup set O(1) instead of O(M)
     std::unordered_set<int> ring_set(active_ring.begin(), active_ring.end());
-    
     const std::vector<int>& row = ranking_vector[city_id - 1];
 
     for (int candidate_id : row)
@@ -82,7 +98,6 @@ Assign_Stations(int total_stations,
     if (dist.empty() || ranking_vector.empty())
         return assignment;
 
-    // OPTIMIZED: Pre-compute ring membership as boolean array O(1) lookup
     std::vector<bool> is_in_ring(total_stations + 1, false);
     for (int ring_id : active_ring)
     {
@@ -92,7 +107,7 @@ Assign_Stations(int total_stations,
 
     for (int s = 1; s <= total_stations && s <= (int)dist.size(); ++s)
     {
-        if (!is_in_ring[s])  // O(1) lookup instead of nested loop
+        if (!is_in_ring[s])
         {
             int nearest = Find_Nearest_Station(s, active_ring, ranking_vector);
             if (nearest > 0)
