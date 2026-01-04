@@ -7,6 +7,9 @@
 #include "utils/Random.h"
 #include <algorithm>
 #include <thread>
+#include <chrono>
+#include <iostream>
+#include <iomanip>
 
 void EvolveSpecie(
     std::vector<Individual>& specie,
@@ -24,58 +27,53 @@ void EvolveSpecie(
     int scramble_percentage,
     double mating_pool_fraction)
 {
+    // Chrono global
+    auto t_start = std::chrono::high_resolution_clock::now();
+
     int popsize = static_cast<int>(specie.size());
     if (popsize <= 1) return;
 
-    // 1) Evaluate all individuals (use cached_cost when available)
+    // --- PHASE 1: EVALUATION & SORT ---
+    auto t_1 = std::chrono::high_resolution_clock::now();
+
+    // 1) Evaluate all individuals
     std::vector<double> costs(popsize);
     for (int i = 0; i < popsize; ++i)
     {
         if (specie[i].cached_cost < 1e17) costs[i] = specie[i].cached_cost;
         else costs[i] = Total_Cost_Individual(alpha, specie[i], total_stations, dist, ranking);
-        // store cached value
         specie[i].cached_cost = costs[i];
     }
 
     // 2) Sort by cost
     std::vector<std::pair<double, int>> cost_index(popsize);
-    for (int i = 0; i < popsize; ++i)
-        cost_index[i] = { costs[i], i };
-
+    for (int i = 0; i < popsize; ++i) cost_index[i] = { costs[i], i };
     std::sort(cost_index.begin(), cost_index.end());
 
     std::vector<int> sorted_indices(popsize);
-    for (int i = 0; i < popsize; ++i)
-        sorted_indices[i] = cost_index[i].second;
+    for (int i = 0; i < popsize; ++i) sorted_indices[i] = cost_index[i].second;
 
-    // 3) Create new population with elitism
+    auto t_eval_sort = std::chrono::high_resolution_clock::now();
+
+    // --- PHASE 2: SELECTION ---
     std::vector<Individual> new_pop;
     new_pop.reserve(popsize);
 
     int elite = std::min(elitism_count, popsize);
-    for (int e = 0; e < elite; ++e)
-    {
+    for (int e = 0; e < elite; ++e) {
         Individual elite_ind = specie[sorted_indices[e]];
-        elite_ind.cached_cost = costs[sorted_indices[e]];
         new_pop.push_back(std::move(elite_ind));
     }
 
     int need = popsize - static_cast<int>(new_pop.size());
-    if (need <= 0)
-    {
-        specie.swap(new_pop);
-        return;
-    }
 
-    // 4) Build mating pool
     int mating_pool_size = std::max(2, static_cast<int>(mating_pool_fraction * popsize));
-    if (mating_pool_size > popsize) mating_pool_size = popsize;
-
     std::vector<int> mating_pool(mating_pool_size);
-    for (int i = 0; i < mating_pool_size; ++i)
-        mating_pool[i] = sorted_indices[i];
+    for (int i = 0; i < mating_pool_size; ++i) mating_pool[i] = sorted_indices[i];
 
-    // 5) Generate children (lightweight: no 2-opt, no cost yet)
+    auto t_selection = std::chrono::high_resolution_clock::now();
+
+    // --- PHASE 3: BREEDING (CROSSOVER + MUTATION) ---
     std::vector<Individual> children;
     children.reserve(need);
     while (static_cast<int>(children.size()) < need)
@@ -83,38 +81,26 @@ void EvolveSpecie(
         int i1 = mating_pool[RandInt(0, mating_pool_size - 1)];
         int i2 = mating_pool[RandInt(0, mating_pool_size - 1)];
 
-        const Individual& p1 = specie[i1];
-        const Individual& p2 = specie[i2];
-
-        std::vector<int> child_ring = Slice_Crossover(p1.active_ring, p2.active_ring);
-
+        std::vector<int> child_ring = Slice_Crossover(specie[i1].active_ring, specie[i2].active_ring);
         Individual child;
         child.active_ring = std::move(child_ring);
-        child.cached_cost = 1e18; // mark unevaluated
+        child.cached_cost = 1e18;
 
-        bool force_mutation = (child.active_ring == p1.active_ring || 
-                               child.active_ring == p2.active_ring);
-
-        if (force_mutation || RandDouble() < mutation_rate)
-        {
-            child = Mutations(add_percentage, remove_percentage,
-                              swap_percentage, inversion_percentage, scramble_percentage,
-                              child, total_stations, dist);
-            child.cached_cost = 1e18;
-        }
-
+        child = Mutations(add_percentage, remove_percentage,
+            swap_percentage, inversion_percentage, scramble_percentage,
+            child, total_stations, dist);
         children.push_back(std::move(child));
     }
 
-    // 6) Improve children in parallel (TwoOpt + cost eval)
+    auto t_breeding = std::chrono::high_resolution_clock::now();
+
+    // --- PHASE 4: LOCAL SEARCH (2-OPT) ---
     unsigned int hw = std::thread::hardware_concurrency();
     if (hw == 0) hw = 4;
     int threads = std::min<unsigned int>(hw, children.size());
     int chunk = (static_cast<int>(children.size()) + threads - 1) / threads;
 
     std::vector<std::thread> workers;
-    workers.reserve(threads);
-
     for (int t = 0; t < threads; ++t)
     {
         int start = t * chunk;
@@ -122,20 +108,30 @@ void EvolveSpecie(
         workers.emplace_back([&, start, end]() {
             for (int i = start; i < end; ++i)
             {
-                // Local search
                 TwoOptImproveAlpha(children[i], alpha, dist, ranking);
-                // Evaluate cost
-                double c = Total_Cost_Individual(alpha, children[i], total_stations, dist, ranking);
-                children[i].cached_cost = c;
+                children[i].cached_cost = Total_Cost_Individual(alpha, children[i], total_stations, dist, ranking);
             }
-        });
+            });
     }
     for (auto& w : workers) if (w.joinable()) w.join();
 
-    // 7) Append children to new population
-    for (auto& ch : children)
-        new_pop.push_back(std::move(ch));
-
+    for (auto& ch : children) new_pop.push_back(std::move(ch));
     specie.swap(new_pop);
-}
 
+    auto t_end = std::chrono::high_resolution_clock::now();
+
+    // --- PRINTING (ALWAYS) ---
+    // Suppression de la condition if (counter % 100) pour voir chaque gen
+    auto d_eval = std::chrono::duration_cast<std::chrono::microseconds>(t_eval_sort - t_1).count();
+    auto d_sel = std::chrono::duration_cast<std::chrono::microseconds>(t_selection - t_eval_sort).count();
+    auto d_breed = std::chrono::duration_cast<std::chrono::microseconds>(t_breeding - t_selection).count();
+    auto d_ls = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_breeding).count();
+    auto d_total = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start).count();
+
+    std::cout << "[PROFILE] Total: " << std::setw(5) << d_total / 1000.0 << "ms | "
+        << "Eval: " << std::setw(4) << d_eval / 1000.0 << "ms | "
+        << "Sel: " << std::setw(4) << d_sel / 1000.0 << "ms | "
+        << "Xover: " << std::setw(4) << d_breed / 1000.0 << "ms | "
+        << "2-OPT: " << std::setw(5) << d_ls / 1000.0 << "ms ("
+        << (int)(100.0 * d_ls / d_total) << "%)" << std::endl;
+}

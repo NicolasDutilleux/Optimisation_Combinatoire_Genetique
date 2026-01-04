@@ -59,16 +59,7 @@
     <ClCompile Include="utils\Random.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="CHANGES.md" />
-    <None Include="COMPLETION_CHECKLIST.md" />
-    <None Include="DETAILED_CHANGES.md" />
-    <None Include="FINAL_SUMMARY.md" />
-    <None Include="INDEX.md" />
-    <None Include="OPTIMIZATIONS_SUMMARY.md" />
-    <None Include="OPTIMIZATION_COMPLETION_REPORT.md" />
-    <None Include="QUICK_REFERENCE.md" />
     <None Include="README.md" />
-    <None Include="VISUAL_SUMMARY.md" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
