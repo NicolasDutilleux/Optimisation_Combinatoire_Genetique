@@ -4,9 +4,7 @@
 #include <vector>
 
 struct Individual {
-    std::vector<int> ids;      // permutation (1..N) Ids
-    std::vector<bool> mask;     // visit mask
+    std::vector<int> active_ring;  // IDs of active stations forming the ring (1..N)
 };
 
 #endif
-

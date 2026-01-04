@@ -1,6 +1,9 @@
 #include "Cost.h"
-#include "utils/Distance.h" // Find_Nearest_Station
+#include "utils/Distance.h"
 #include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <unordered_set>
 
 double Cost_station(int alpha, double distance)
 {
@@ -9,100 +12,91 @@ double Cost_station(int alpha, double distance)
 
 double Cost_out_ring(int alpha, double distance)
 {
-    return (10 - alpha) * distance;
+    return (10.0 - alpha) * distance;
 }
 
 double RingCostOnly(int alpha,
-    const std::vector<int>& perm,
-    const std::vector<bool>& mask,
+    const std::vector<int>& active_ring,
     const std::vector<std::vector<double>>& dist)
 {
-    int n = static_cast<int>(perm.size());
-    if (n <= 1) return 0.0;
-
-    int first_idx = -1;
-    for (int i = 0; i < n; ++i)
-    {
-        if (mask[perm[i] - 1]) { first_idx = i; break; }
-    }
-    if (first_idx == -1) return 1e18;
+    int m = static_cast<int>(active_ring.size());
+    if (m <= 1) return 0.0;
+    if (dist.empty()) return 0.0;
 
     double cost = 0.0;
-    int prev_id = perm[first_idx];
-
-    for (int step = 1; step < n; ++step)
+    for (int i = 0; i < m; ++i)
     {
-        int idx = (first_idx + step) % n;
-        int id = perm[idx];
-        if (!mask[id - 1]) continue;
-
-        cost += Cost_station(alpha, dist[prev_id - 1][id - 1]);
-        prev_id = id;
+        int id_a = active_ring[i];
+        int id_b = active_ring[(i + 1) % m];
+        
+        if (id_a <= 0 || id_a > (int)dist.size() || id_b <= 0 || id_b > (int)dist.size())
+            continue;
+            
+        cost += Cost_station(alpha, dist[id_a - 1][id_b - 1]);
     }
-
-    int first_id = perm[first_idx];
-    if (prev_id != first_id)
-        cost += Cost_station(alpha, dist[prev_id - 1][first_id - 1]);
-
     return cost;
 }
 
+// OPTIMIZED: Pre-compute ring membership instead of nested loop
 double OutRingCostOnly(int alpha,
-    const std::vector<bool>& mask,
+    int total_stations,
+    const std::vector<int>& active_ring,
     const std::vector<std::vector<double>>& dist,
     const std::vector<std::vector<int>>& ranking_vector)
 {
-    int N = static_cast<int>(dist.size());
+    if (dist.empty() || ranking_vector.empty()) return 0.0;
+    
+    // OPTIMIZATION: Use vector<bool> O(1) lookup instead of nested loop O(M)
+    std::vector<bool> is_active(total_stations + 1, false);
+    for (int ring_id : active_ring)
+    {
+        if (ring_id > 0 && ring_id <= total_stations)
+            is_active[ring_id] = true;
+    }
+
     double total = 0.0;
 
-    for (int s = 1; s <= N; ++s)
+    for (int s = 1; s <= total_stations; ++s)
     {
-        if (!mask[s - 1])
+        if (!is_active[s])  // O(1) instead of O(M) nested loop
         {
-            int nearest = Find_Nearest_Station(s, mask, ranking_vector);
-            total += Cost_out_ring(alpha, dist[s - 1][nearest - 1]);
+            int nearest = Find_Nearest_Station(s, active_ring, ranking_vector);
+            if (nearest > 0 && s <= (int)dist.size() && nearest <= (int)dist.size())
+                total += Cost_out_ring(alpha, dist[s - 1][nearest - 1]);
         }
     }
     return total;
 }
 
 double Total_Cost_Individual(int alpha,
-    const std::vector<int>& perm,
-    const std::vector<bool>& mask,
+    const Individual& ind,
+    int total_stations,
     const std::vector<std::vector<double>>& dist,
     const std::vector<std::vector<int>>& ranking_vector)
 {
-    return RingCostOnly(alpha, perm, mask, dist)
-        + OutRingCostOnly(alpha, mask, dist, ranking_vector);
+    return RingCostOnly(alpha, ind.active_ring, dist)
+        + OutRingCostOnly(alpha, total_stations, ind.active_ring, dist, ranking_vector);
 }
 
 std::vector<double> Total_Cost_Specie(int alpha,
     std::vector<Individual>& specie,
+    int total_stations,
     const std::vector<std::vector<double>>& dist,
     const std::vector<std::vector<int>>& ranking)
 {
-    std::vector<double> costs;
-    costs.reserve(specie.size());
+    int popsize = static_cast<int>(specie.size());
+    std::vector<double> costs(popsize);
 
-    for (auto& ind : specie)
-        costs.push_back(Total_Cost_Individual(alpha, ind.ids, ind.mask, dist, ranking));
-
+    for (int i = 0; i < popsize; ++i)
+    {
+        costs[i] = Total_Cost_Individual(alpha, specie[i], total_stations, dist, ranking);
+    }
     return costs;
 }
 
 double RingCostActiveTour(int alpha,
-    const std::vector<int>& active_ids,
+    const std::vector<int>& active_ring,
     const std::vector<std::vector<double>>& dist)
 {
-    int m = static_cast<int>(active_ids.size());
-    if (m <= 1) return 0.0;
-
-    double cost = 0.0;
-    for (int i = 0; i < m; ++i)
-    {
-        int a = active_ids[i];
-        int b = active_ids[(i + 1) % m];
-        cost += Cost_station(alpha, dist[a - 1][b - 1]);
-    }
-    return cost;
+    return RingCostOnly(alpha, active_ring, dist);
 }

@@ -10,15 +10,12 @@ void EvolveSpecie(
     const std::vector<std::vector<int>>& ranking,
     const std::vector<Node>& nodes,
     int alpha,
+    int total_stations,
     double mutation_rate,
-    int max_station_id,
     int elitism_count = 1,
-    int DEL_PCT_RDM = 10,
-    int DEL_PCT_CENT = 10,
-    int SWAP_PCT = 10,
-    int INV_PCT = 10,
-    int SCR_PCT = 10,
-    int INSERTSWAP_PCT = 10,
-    double max_mating_pool_size = 0.5,
-    bool time_bool = true
-);
+    int add_percentage = 15,
+    int remove_percentage = 10,
+    int swap_percentage = 10,
+    int inversion_percentage = 10,
+    int scramble_percentage = 10,
+    double mating_pool_fraction = 0.5);

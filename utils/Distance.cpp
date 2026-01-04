@@ -1,6 +1,7 @@
 #include "utils/Distance.h"
 #include <cmath>
 #include <algorithm>
+#include <unordered_set>
 
 std::vector<std::vector<double>>
 Compute_Distances_2DVector(const std::vector<Node>& node_vector)
@@ -8,37 +9,16 @@ Compute_Distances_2DVector(const std::vector<Node>& node_vector)
     int n = static_cast<int>(node_vector.size());
     std::vector<std::vector<double>> dist(n, std::vector<double>(n));
 
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < n; ++i)
     {
-        for (int j = 0; j < n; j++)
+        for (int j = 0; j < n; ++j)
         {
-            int dx = node_vector[i].x - node_vector[j].x;
-            int dy = node_vector[i].y - node_vector[j].y;
+            double dx = node_vector[i].x - node_vector[j].x;
+            double dy = node_vector[i].y - node_vector[j].y;
             dist[i][j] = std::sqrt(dx * dx + dy * dy);
         }
     }
     return dist;
-}
-
-void Bubble_Sort(std::vector<int>& vector_int_to_sort,
-    std::vector<double>& vector_double_to_sort)
-{
-    int taille = static_cast<int>(vector_int_to_sort.size());
-    bool swapped = true;
-
-    while (swapped)
-    {
-        swapped = false;
-        for (int i = 0; i < taille - 1; i++)
-        {
-            if (vector_double_to_sort[i] > vector_double_to_sort[i + 1])
-            {
-                std::swap(vector_int_to_sort[i], vector_int_to_sort[i + 1]);
-                std::swap(vector_double_to_sort[i], vector_double_to_sort[i + 1]);
-                swapped = true;
-            }
-        }
-    }
 }
 
 std::vector<std::vector<int>>
@@ -47,55 +27,79 @@ Distance_Ranking_2DVector(std::vector<std::vector<double>> distance_vector)
     int n = static_cast<int>(distance_vector.size());
     std::vector<std::vector<int>> ranking(n, std::vector<int>(n));
 
-    std::vector<int> ids(n);
-    std::vector<double> ds(n);
+    if (n == 0) return ranking;
 
     for (int i = 0; i < n; ++i)
     {
+        // Create pairs of (distance, id) for efficient sorting
+        std::vector<std::pair<double, int>> dist_id(n);
         for (int j = 0; j < n; ++j)
         {
-            ds[j] = distance_vector[i][j];
-            ids[j] = j + 1; // id=1 at index 0
+            dist_id[j] = { distance_vector[i][j], j + 1 };
         }
 
-        Bubble_Sort(ids, ds);
+        // OPTIMIZATION: Use std::sort (O(n log n)) instead of Bubble_Sort (O(n²))
+        std::sort(dist_id.begin(), dist_id.end());
 
         for (int j = 0; j < n; ++j)
-            ranking[i][j] = ids[j];
+            ranking[i][j] = dist_id[j].second;
     }
 
     return ranking;
 }
 
+// OPTIMIZED: Use set lookup instead of nested loop
 int Find_Nearest_Station(int city_id,
-    const std::vector<bool>& mask,
+    const std::vector<int>& active_ring,
     const std::vector<std::vector<int>>& ranking_vector)
 {
+    if (city_id <= 0 || city_id > (int)ranking_vector.size())
+        return -1;
+    if (active_ring.empty())
+        return -1;
+
+    // Create a fast lookup set O(1) instead of O(M)
+    std::unordered_set<int> ring_set(active_ring.begin(), active_ring.end());
+    
     const std::vector<int>& row = ranking_vector[city_id - 1];
 
     for (int candidate_id : row)
     {
-        if (mask[candidate_id - 1])
+        if (ring_set.count(candidate_id) > 0)
             return candidate_id;
     }
     return -1;
 }
 
 std::vector<int>
-Assign_Stations(int number_of_stations,
-    const std::vector<bool>& mask,
+Assign_Stations(int total_stations,
+    const std::vector<int>& active_ring,
     const std::vector<std::vector<double>>& dist,
     const std::vector<std::vector<int>>& ranking_vector)
 {
     std::vector<int> assignment;
 
-    for (int s = 1; s <= number_of_stations; ++s)
+    if (dist.empty() || ranking_vector.empty())
+        return assignment;
+
+    // OPTIMIZED: Pre-compute ring membership as boolean array O(1) lookup
+    std::vector<bool> is_in_ring(total_stations + 1, false);
+    for (int ring_id : active_ring)
     {
-        if (!mask[s - 1])
+        if (ring_id > 0 && ring_id <= total_stations)
+            is_in_ring[ring_id] = true;
+    }
+
+    for (int s = 1; s <= total_stations && s <= (int)dist.size(); ++s)
+    {
+        if (!is_in_ring[s])  // O(1) lookup instead of nested loop
         {
-            int nearest_station_id = Find_Nearest_Station(s, mask, ranking_vector);
-            assignment.push_back(s);
-            assignment.push_back(nearest_station_id);
+            int nearest = Find_Nearest_Station(s, active_ring, ranking_vector);
+            if (nearest > 0)
+            {
+                assignment.push_back(s);
+                assignment.push_back(nearest);
+            }
         }
     }
     return assignment;

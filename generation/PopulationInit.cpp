@@ -1,8 +1,6 @@
 #include "generation/PopulationInit.h"
 #include "utils/Random.h"
-
 #include <algorithm>
-#include <random>
 
 std::vector<std::vector<Individual>> Random_Generation(
     const std::vector<Node>& node_vector,
@@ -11,15 +9,7 @@ std::vector<std::vector<Individual>> Random_Generation(
 {
     std::vector<std::vector<Individual>> species(species_number);
 
-    int station_number = node_vector.back().id; // keep your assumption
-
-    std::vector<int> pool;
-    pool.reserve(station_number);
-    for (int x = 1; x <= station_number; ++x)
-        pool.push_back(x);
-
-    std::random_device rd;
-    std::mt19937 rng(rd());
+    int total_stations = static_cast<int>(node_vector.size());
 
     for (int i = 0; i < species_number; ++i)
     {
@@ -27,22 +17,18 @@ std::vector<std::vector<Individual>> Random_Generation(
         {
             Individual ind;
 
-            ind.ids = pool;
-            std::shuffle(ind.ids.begin() + 1, ind.ids.end(), rng); // keep depot at front
+            // Create a random ring with 3 to total_stations active stations
+            int ring_size = RandInt(3, total_stations);
 
-            ind.mask.assign(station_number, false);
-            ind.mask[0] = true;
+            // Shuffle all station IDs
+            std::vector<int> all_ids;
+            for (int s = 1; s <= total_stations; ++s)
+                all_ids.push_back(s);
 
-            int active_count = RandInt(3, station_number);
+            std::shuffle(all_ids.begin(), all_ids.end(), GLOBAL_RNG());
 
-            std::vector<int> candidate_indices;
-            candidate_indices.reserve(station_number - 1);
-            for (int k = 1; k < station_number; ++k)
-                candidate_indices.push_back(k);
-
-            std::shuffle(candidate_indices.begin(), candidate_indices.end(), rng);
-            for (int k = 0; k < active_count - 1; ++k)
-                ind.mask[candidate_indices[k]] = true;
+            // Keep the first ring_size stations
+            ind.active_ring.assign(all_ids.begin(), all_ids.begin() + ring_size);
 
             species[i].push_back(std::move(ind));
         }

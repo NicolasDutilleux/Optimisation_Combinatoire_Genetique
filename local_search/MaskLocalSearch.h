@@ -1,23 +1,15 @@
 #pragma once
 
 #include <vector>
-
 #include "core/Individual.h"
 
-/*
- * Perform local search on the mask of an individual.
- * This may:
- *  - remove active stations
- *  - insert inactive stations
- *  - re-optimize the tour locally
- */
+// Hill-climb on active_ring: add/remove nodes if it improves total cost
 void ImproveMaskLocal(
     Individual& ind,
     int alpha,
-    int max_station_id,
+    int total_stations,
     const std::vector<std::vector<double>>& dist,
-    const std::vector<std::vector<int>>& ranking
-);
+    const std::vector<std::vector<int>>& ranking);
 
 
 

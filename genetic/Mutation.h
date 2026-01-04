@@ -4,40 +4,30 @@
 #include "core/Individual.h"
 #include "core/Node.h"
 
-inline void Mutation_Swap_Simple(std::vector<int>& individual);
-
-inline void Mutation_Inversion(std::vector<int>& individual);
-
-inline void Mutation_Scramble(std::vector<int>& individual);
-
-inline void Mutation_Insert_Swap(std::vector<int>& individual);
-
-inline void Mutation_Deletion_Centroid(
-    std::vector<int>& ids,
-    std::vector<bool>& mask,
-    const std::vector<Node>& nodes);
-
-inline void Mutation_RandomMultiDeletion(
-    const std::vector<int>& ids,
-    std::vector<bool>& mask,
-    int max_del,
-    int min_active = 2);
-
-inline void Mutation_Insertion_Heuristic(
-    std::vector<int>& ids,
-    std::vector<bool>& mask,
-    int max_station_id,
+// Add a random inactive station at the best insertion position
+void Mutation_Add_Node(
+    std::vector<int>& active_ring,
+    int total_stations,
     const std::vector<std::vector<double>>& dist);
 
+// Remove a random station from the ring (keeping at least 3)
+void Mutation_Remove_Node(
+    std::vector<int>& active_ring,
+    int min_ring_size = 3);
+
+// Permutation mutations
+void Mutation_Swap_Simple(std::vector<int>& active_ring);
+void Mutation_Inversion(std::vector<int>& active_ring);
+void Mutation_Scramble(std::vector<int>& active_ring);
+
+// All mutations bundled together
 Individual Mutations(
-    int deletion_pourcentage,
-    int multi_deletion_pourcentage,
-    int swapping_pourcentage,
-    int inversion_pourcentage,
-    int scramble_pourcentage,
-    int insertswap_pourcentage,
+    int add_percentage,
+    int remove_percentage,
+    int swap_percentage,
+    int inversion_percentage,
+    int scramble_percentage,
     const Individual& individual,
-    int max_station_id,
-    const std::vector<Node>& nodes,
+    int total_stations,
     const std::vector<std::vector<double>>& dist);
 
