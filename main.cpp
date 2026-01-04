@@ -27,8 +27,8 @@ int main()
     // 3) Paramètres GA
     const int NUM_SPECIES = 3;
     const int POP_SIZE = 150;
-    const int MAX_GENERATIONS = 1000;
-    const int ALPHA = 5;
+    const int MAX_GENERATIONS = 100000;
+    const int ALPHA = 3;
     double MUTATION_RATE = 0.15;   // à ajuster
     const int ELITISM = 2;
 

@@ -60,7 +60,7 @@ Second line: a keyword (e.g. BEGIN) also ignored.
 
 Then one line per station: id x y.
 
-High-Level Algorithm
+## High-Level Algorithm
 
 The program runs the following pipeline:
 
