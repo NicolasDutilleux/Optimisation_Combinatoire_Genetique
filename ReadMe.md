@@ -44,12 +44,12 @@ Basic run (expects a data file under the `data/` folder):
 ```
 
 Common CLI options
-- `-g <N>`  – set max generations (example: `-g 1000`)
-- `-s <N>`  – number of species
-- `-p <N>`  – population size per species
-- `-t <N>`  – start thread pool with N workers (0 = single-threaded)
-- `-v`      – verbose logging
-- `-l <N>`  – log/report interval in generations
+- `-g <N>`  Â– set max generations (example: `-g 1000`)
+- `-s <N>`  Â– number of species
+- `-p <N>`  Â– population size per species
+- `-t <N>`  Â– start thread pool with N workers (0 = single-threaded)
+- `-v`      Â– verbose logging
+- `-l <N>`  Â– log/report interval in generations
 
 Example:
 
@@ -59,16 +59,16 @@ Example:
 
 ## File layout (important files)
 
-- `main.c` — program entry, main evolution loop, thread-pool/worker implementation
-- `utils/main_helpers.h` and `utils/main_helpers.c` — CLI parsing, timestamp printing, and detailed evaluation/reporting helpers (kept simple and serial for readability)
-- `core/Individual.h` — individual representation
-- `core/Node.h` — node/station definition
-- `generation/` — population initialization
-- `utils/Distance.c/h` — distance matrix and ranking utilities
-- `evolution/` — `EvolveSpecie` implementation and evolution operators orchestration
-- `genetic/` — selection, crossover and mutation operators
-- `cost/` — cost evaluation functions
-- `data/` — datasets (e.g. `data/127/127_data.txt`)
+- `main.c` Â— program entry, main evolution loop, thread-pool/worker implementation
+- `utils/main_helpers.h` and `utils/main_helpers.c` Â— CLI parsing, timestamp printing, and detailed evaluation/reporting helpers (kept simple and serial for readability)
+- `core/Individual.h` Â— individual representation
+- `core/Node.h` Â— node/station definition
+- `generation/` Â— population initialization
+- `utils/Distance.c/h` Â— distance matrix and ranking utilities
+- `evolution/` Â— `EvolveSpecie` implementation and evolution operators orchestration
+- `genetic/` Â— selection, crossover and mutation operators
+- `cost/` Â— cost evaluation functions
+- `data/` Â— datasets (e.g. `data/127/127_data.txt`)
 
 ## Notes for developers
 - The code is intentionally modular. If you prefer more separation, move the thread-pool (`pool_*` functions and `pool_worker`) into `utils/thread_pool.c/h` and keep only orchestration in `main.c`.
