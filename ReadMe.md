@@ -19,6 +19,21 @@ Key features
 - Thread-pool and worker logic remain in `main.c` (can be moved to its own module if desired).
 - Several helper modules (cost, evolution, genetic operators, distance, IO) remain in their original folders.
 
+```mermaid
+graph TD;
+    A[Start Program] --> B[Load Data & Compute Matrices];
+    B --> C[Initialize Population];
+    C --> D{Generations Loop};
+    D -->|Evolve| E[Mutation & Crossover];
+    E -->|Optimize| F[2-Opt Local Search];
+    F --> G{Log Interval?};
+    G -- Yes --> H[Print Top 5 Species];
+    G -- No --> D;
+    H --> I{Stagnation?};
+    I -- Yes --> J[Stop Early];
+    I -- No --> D;
+    J --> K[End];
+```
 ## Build
 
 Windows / Visual Studio
