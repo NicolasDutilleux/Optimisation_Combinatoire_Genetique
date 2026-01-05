@@ -1,0 +1,64 @@
+// local_search/TwoOpt.c - Pure C implementation with defensive checks
+#include "TwoOpt.h"
+#include <stdio.h>
+
+void TwoOptImproveAlpha(Individual* ind, int alpha, const double** dist, const int** ranking)
+{
+    if (!ind || !dist) return;
+    int m = ind->ring_size;
+    if (m <= 3) return;
+
+    // Validate indices
+    for (int i = 0; i < m; ++i) {
+        int id = ind->active_ring[i];
+        if (id <= 0) return;
+    }
+
+    int max_iterations = (m <= 10) ? 5 : 10;
+    int iteration = 0;
+    int improved = 1;
+
+    while (improved && iteration < max_iterations) {
+        ++iteration;
+        improved = 0;
+        double best_delta = 0.0;
+        int best_i = -1;
+        int best_j = -1;
+
+        int check_limit = (m <= 10) ? m : (m / 2);
+
+        for (int i = 0; i < check_limit && i < m - 2; ++i) {
+            for (int j = i + 2; j < m; ++j) {
+                int id_a = ind->active_ring[i];
+                int id_b = ind->active_ring[i + 1];
+                int id_c = ind->active_ring[j];
+                int id_d = ind->active_ring[(j + 1) % m];
+
+                if (id_a > 0 && id_b > 0 && id_c > 0 && id_d > 0) {
+                    double old_cost = dist[id_a - 1][id_b - 1] + dist[id_c - 1][id_d - 1];
+                    double new_cost = dist[id_a - 1][id_c - 1] + dist[id_b - 1][id_d - 1];
+                    double delta = (new_cost - old_cost) * alpha;
+
+                    if (delta < best_delta - 1e-12) {
+                        best_delta = delta;
+                        best_i = i;
+                        best_j = j;
+                        improved = 1;
+                    }
+                }
+            }
+        }
+
+        if (!improved) break;
+
+        int a = best_i + 1;
+        int b = best_j;
+        while (a < b) {
+            int tmp = ind->active_ring[a];
+            ind->active_ring[a] = ind->active_ring[b];
+            ind->active_ring[b] = tmp;
+            a++;
+            b--;
+        }
+    }
+}
