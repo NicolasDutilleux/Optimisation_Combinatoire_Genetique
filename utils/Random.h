@@ -1,6 +1,6 @@
+// utils/Random.h - Pure C version
 #pragma once
-#include <random>
 
-std::mt19937& GLOBAL_RNG();
 int RandInt(int a, int b);
-double RandDouble();
+double RandDouble(void);
+void RNG_Init(void);

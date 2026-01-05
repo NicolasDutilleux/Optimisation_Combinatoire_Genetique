@@ -28,6 +28,8 @@
     <Text Include="data\127\127_sol.txt" />
     <Text Include="data\225\225_data.txt" />
     <Text Include="data\225\225_sol.txt" />
+    <Text Include="FINAL_SUMMARY.txt" />
+    <Text Include="README_FINAL.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="core\Individual.h">
@@ -69,36 +71,56 @@
     <ClInclude Include="local_search\MaskLocalSearch.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
+    <ClInclude Include="utils\FileIO.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\main_helpers.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="cost\Cost.cpp">
+    <ClCompile Include="core\Individual.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="evolution\EvolveSpecie.cpp">
+    <ClCompile Include="cost\Cost.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="generation\PopulationInit.cpp">
+    <ClCompile Include="evolution\EvolveSpecie.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="genetic\Crossover.cpp">
+    <ClCompile Include="generation\PopulationInit.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="genetic\Mutation.cpp">
+    <ClCompile Include="genetic\Crossover.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="genetic\Selection.cpp">
+    <ClCompile Include="genetic\Mutation.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="local_search\TwoOpt.cpp">
+    <ClCompile Include="genetic\Selection.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="utils\Distance.cpp">
+    <ClCompile Include="local_search\TwoOpt.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="utils\Random.cpp">
+    <ClCompile Include="main.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="utils\Distance.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\FileIO.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\Random.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\hierarchy_and_print_utils.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\main_helpers.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="COMPLETION_CHECKLIST.md" />

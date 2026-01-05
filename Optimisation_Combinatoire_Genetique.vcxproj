@@ -30,6 +30,8 @@
     <Text Include="data\225\225_sol.txt" />
     <Text Include="data\51\51_data.txt" />
     <Text Include="data\51\51_sol.txt" />
+    <Text Include="FINAL_SUMMARY.txt" />
+    <Text Include="README_FINAL.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="core\Individual.h" />
@@ -43,20 +45,26 @@
     <ClInclude Include="local_search\MaskLocalSearch.h" />
     <ClInclude Include="local_search\TwoOpt.h" />
     <ClInclude Include="utils\Distance.h" />
+    <ClInclude Include="utils\FileIO.h" />
     <ClInclude Include="utils\hierarchy_and_print_utils.h" />
+    <ClInclude Include="utils\main_helpers.h" />
     <ClInclude Include="utils\Random.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="cost\Cost.cpp" />
-    <ClCompile Include="evolution\EvolveSpecie.cpp" />
-    <ClCompile Include="generation\PopulationInit.cpp" />
-    <ClCompile Include="genetic\Crossover.cpp" />
-    <ClCompile Include="genetic\Mutation.cpp" />
-    <ClCompile Include="genetic\Selection.cpp" />
-    <ClCompile Include="local_search\TwoOpt.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="utils\Distance.cpp" />
-    <ClCompile Include="utils\Random.cpp" />
+    <ClCompile Include="core\Individual.c" />
+    <ClCompile Include="cost\Cost.c" />
+    <ClCompile Include="evolution\EvolveSpecie.c" />
+    <ClCompile Include="generation\PopulationInit.c" />
+    <ClCompile Include="genetic\Crossover.c" />
+    <ClCompile Include="genetic\Mutation.c" />
+    <ClCompile Include="genetic\Selection.c" />
+    <ClCompile Include="local_search\TwoOpt.c" />
+    <ClCompile Include="main.c" />
+    <ClCompile Include="utils\Distance.c" />
+    <ClCompile Include="utils\FileIO.c" />
+    <ClCompile Include="utils\hierarchy_and_print_utils.c" />
+    <ClCompile Include="utils\main_helpers.c" />
+    <ClCompile Include="utils\Random.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="CHANGES.md" />
@@ -128,6 +136,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>.</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -142,6 +152,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>.</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -154,6 +166,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>.</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <AdditionalIncludeDirectories>.</AdditionalIncludeDirectories>
     </ClCompile>
@@ -170,6 +184,9 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>.</AdditionalIncludeDirectories>
+      <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

@@ -1,9 +1,18 @@
-#pragma once
-#include <vector>
-#include "core/Node.h"
-#include "core/Individual.h"
+#ifndef POPULATIONINIT_H
+#define POPULATIONINIT_H
 
-std::vector<std::vector<Individual>> Random_Generation(
-    const std::vector<Node>& node_vector,
+#include "core\Node.h"
+#include "core\Individual.h"
+
+// Allocates 2D array of individuals (species x individuals)
+// Returns array of pointers to species arrays
+Individual** Random_Generation(
+    const Node* node_vector, int num_nodes,
     int species_number,
-    int individual_number);
+    int individual_number,
+    int* out_species_count);
+
+// Free population
+void Free_Population(Individual** species, int num_species, int ind_per_species);
+
+#endif

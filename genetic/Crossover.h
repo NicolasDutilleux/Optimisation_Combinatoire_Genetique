@@ -1,7 +1,12 @@
-#pragma once
-#include <vector>
+// genetic/Crossover.h - Pure C version
+#ifndef CROSSOVER_H
+#define CROSSOVER_H
 
 // Slice crossover: take a slice from parent A, fill rest from parent B
-std::vector<int> Slice_Crossover(
-    const std::vector<int>& parentA,
-    const std::vector<int>& parentB);
+// Returns child ring (caller must free)
+int* Slice_Crossover(
+    const int* parentA, int sizeA,
+    const int* parentB, int sizeB,
+    int* child_size, int max_capacity);
+
+#endif

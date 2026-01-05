@@ -1,4 +1,8 @@
-#pragma once
-#include <vector>
+// genetic/Selection.h - Pure C version
+#ifndef SELECTION_H
+#define SELECTION_H
 
-int Select_Best(const std::vector<double>& costs);
+// Find index of best (minimum) cost
+int Select_Best(const double* costs, int size);
+
+#endif

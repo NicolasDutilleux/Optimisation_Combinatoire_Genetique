@@ -1,18 +1,12 @@
 #pragma once
-#include <vector>
-#include "core/Node.h"
+#include "core\Node.h"
 
-std::vector<std::vector<double>>
-Compute_Distances_2DVector(const std::vector<Node>& node_vector);
+// Allocate 2D distance matrix
+double** Compute_Distances_2DVector(const Node* nodes, int num_nodes);
 
-// Fast distance lookup for precomputed matrix
-double Get_Distance(int i, int j);
+// Allocate 2D ranking matrix  
+int** Distance_Ranking_2DVector(double** dist, int rows, int cols);
 
-std::vector<std::vector<int>>
-Distance_Ranking_2DVector(std::vector<std::vector<double>> distance_vector);
-
-std::vector<int>
-Assign_Stations(int total_stations,
-    const std::vector<int>& active_ring,
-    const std::vector<std::vector<double>>& dist,
-    const std::vector<std::vector<int>>& ranking_vector);
+// Free 2D arrays
+void Free_2DArray_Double(double** arr, int rows);
+void Free_2DArray_Int(int** arr, int rows);
