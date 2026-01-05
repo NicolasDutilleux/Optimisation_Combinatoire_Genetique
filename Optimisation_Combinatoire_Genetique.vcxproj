@@ -30,8 +30,7 @@
     <Text Include="data\225\225_sol.txt" />
     <Text Include="data\51\51_data.txt" />
     <Text Include="data\51\51_sol.txt" />
-    <Text Include="FINAL_SUMMARY.txt" />
-    <Text Include="README_FINAL.txt" />
+    <Text Include="README_FINAL.md" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="core\Individual.h" />
