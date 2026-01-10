@@ -413,9 +413,9 @@ int main(int argc, char** argv)
                 
                 visualization_done = 1;  // Ne plus visualiser après
                 
-                // Reset stagnation to continue evolution
-                stagnation = 0;
-                printf("[STAGNATION] Reset - continuing evolution...\n\n");
+                // NE PAS remettre stagnation à 0 !
+                // Le mécanisme d'augmentation de mutation doit continuer
+                printf("[VISUALIZATION] Done - mutation rate adaptation continues\n\n");
             }
         }
 

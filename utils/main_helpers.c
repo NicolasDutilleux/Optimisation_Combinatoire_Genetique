@@ -216,14 +216,34 @@ void evaluate_and_report(
         printf("  >>> IMPROVEMENT: %.2f -> %.2f\n", *old_best_ptr, best_cost);
         *old_best_ptr = best_cost;
         *stagnation_count_ptr = 0;
+        
+        // Reset mutation rate on improvement
+        if (*MUTATION_RATE_ptr > 0.30) {
+            *MUTATION_RATE_ptr = 0.30;
+            printf("  Mutation rate reset to %.3f\n", *MUTATION_RATE_ptr);
+        }
     } else {
         (*stagnation_count_ptr)++;
         printf("  No improvement (stagnation: %d)\n", *stagnation_count_ptr);
 
-        // Increase mutation rate every 5 stagnations
+        // Increase mutation rate progressively based on stagnation level
         if ((*stagnation_count_ptr) % 5 == 0) {
-            double new_rate = (*MUTATION_RATE_ptr) * 1.25;
-            if (new_rate > 0.5) new_rate = 0.5;
+            double new_rate;
+            
+            if (*stagnation_count_ptr < 20) {
+                // Phase 1: Augmentation modérée (30% -> 50%)
+                new_rate = (*MUTATION_RATE_ptr) * 1.20;
+                if (new_rate > 0.50) new_rate = 0.50;
+            } else if (*stagnation_count_ptr < 50) {
+                // Phase 2: Augmentation forte (50% -> 70%)
+                new_rate = (*MUTATION_RATE_ptr) * 1.15;
+                if (new_rate > 0.70) new_rate = 0.70;
+            } else {
+                // Phase 3: Mode exploration maximale (70% -> 90%)
+                new_rate = (*MUTATION_RATE_ptr) * 1.10;
+                if (new_rate > 0.90) new_rate = 0.90;
+            }
+            
             if (new_rate > *MUTATION_RATE_ptr) {
                 *MUTATION_RATE_ptr = new_rate;
                 printf("  Mutation rate increased to %.3f\n", *MUTATION_RATE_ptr);
