@@ -1,17 +1,16 @@
 // main.c - Genetic Algorithm for Ring Optimization
-// Multi-threaded C implementation with Windows thread pool
+// Entry point and orchestration
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <windows.h>
-#include <process.h>
 
 #include "core\Node.h"
 #include "core\Individual.h"
 #include "generation\PopulationInit.h"
 #include "utils\Distance.h"
 #include "utils\Random.h"
+#include "utils\ThreadPool.h"
 #include "evolution\EvolveSpecie.h"
 #include "cost\Cost.h"
 #include "genetic\Selection.h"
@@ -20,13 +19,7 @@
 #include "utils\main_helpers.h"
 
 // =============================================================================
-// GLOBAL CONFIGURATION
-// =============================================================================
-static int g_enable_logs = 0;
-static int g_enable_timers = 0;
-
-// =============================================================================
-// HIGH-RESOLUTION TIMER (Windows QueryPerformanceCounter)
+// HIGH-RESOLUTION TIMER
 // =============================================================================
 typedef struct {
     LARGE_INTEGER start;
@@ -42,152 +35,6 @@ static double timer_ms(Timer* t) {
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
     return (double)(now.QuadPart - t->start.QuadPart) * 1000.0 / (double)t->freq.QuadPart;
-}
-
-// =============================================================================
-// EVOLUTION TASK STRUCTURE
-// =============================================================================
-typedef struct {
-    Individual* specie;
-    int pop_size;
-    double** dist;
-    int** ranking;
-    Node* nodes;
-    int total_stations;
-    int alpha;
-    double mutation_rate;
-    int elitism;
-    int add_pct, remove_pct, swap_pct, inv_pct, scr_pct;
-} EvolveTask;
-
-// =============================================================================
-// SIMPLE THREAD POOL (producer-consumer pattern)
-// =============================================================================
-static EvolveTask* g_tasks = NULL;
-static int g_task_count = 0;
-static volatile LONG g_next_task = 0;
-static volatile LONG g_done_count = 0;
-
-static HANDLE* g_worker_threads = NULL;
-static int g_num_workers = 0;
-static volatile int g_pool_shutdown = 0;
-
-static HANDLE g_work_semaphore = NULL;   // Signals work available
-static HANDLE g_done_event = NULL;       // Signals all tasks complete
-static CRITICAL_SECTION g_task_lock;
-
-// Worker thread function
-static unsigned __stdcall worker_thread_func(void* arg) {
-    int worker_id = (int)(intptr_t)arg;
-    
-    while (!g_pool_shutdown) {
-        // Wait for work
-        DWORD wait_result = WaitForSingleObject(g_work_semaphore, 100);
-        
-        if (g_pool_shutdown) break;
-        if (wait_result == WAIT_TIMEOUT) continue;
-        
-        // Get next task
-        LONG task_idx = InterlockedIncrement(&g_next_task) - 1;
-        
-        if (task_idx < g_task_count) {
-            EvolveTask* task = &g_tasks[task_idx];
-            
-            // Execute evolution
-            EvolveSpecie(
-                task->specie, task->pop_size,
-                (const double**)task->dist, (const int**)task->ranking,
-                task->nodes, task->total_stations,
-                task->alpha, task->total_stations,
-                task->mutation_rate, task->elitism,
-                task->add_pct, task->remove_pct, task->swap_pct,
-                task->inv_pct, task->scr_pct, 0.5,
-                g_enable_logs, g_enable_timers
-            );
-            
-            // Signal completion
-            LONG done = InterlockedIncrement(&g_done_count);
-            if (done >= g_task_count) {
-                SetEvent(g_done_event);
-            }
-        }
-    }
-    
-    return 0;
-}
-
-// Create thread pool
-static int pool_init(int num_workers) {
-    g_num_workers = num_workers;
-    g_pool_shutdown = 0;
-    
-    InitializeCriticalSection(&g_task_lock);
-    
-    // Semaphore: max count = large number, initial = 0
-    g_work_semaphore = CreateSemaphore(NULL, 0, 10000, NULL);
-    g_done_event = CreateEvent(NULL, TRUE, FALSE, NULL);  // Manual reset
-    
-    if (!g_work_semaphore || !g_done_event) return 0;
-    
-    g_worker_threads = (HANDLE*)malloc(num_workers * sizeof(HANDLE));
-    if (!g_worker_threads) return 0;
-    
-    for (int i = 0; i < num_workers; i++) {
-        unsigned tid;
-        g_worker_threads[i] = (HANDLE)_beginthreadex(
-            NULL, 0, worker_thread_func, (void*)(intptr_t)i, 0, &tid
-        );
-        if (!g_worker_threads[i]) {
-            g_pool_shutdown = 1;
-            for (int j = 0; j < i; j++) {
-                WaitForSingleObject(g_worker_threads[j], INFINITE);
-                CloseHandle(g_worker_threads[j]);
-            }
-            free(g_worker_threads);
-            g_worker_threads = NULL;
-            return 0;
-        }
-    }
-    
-    return 1;
-}
-
-// Submit tasks and wait for completion
-static void pool_run(EvolveTask* tasks, int count) {
-    g_tasks = tasks;
-    g_task_count = count;
-    g_next_task = 0;
-    g_done_count = 0;
-    
-    ResetEvent(g_done_event);
-    
-    // Release semaphore 'count' times to wake workers
-    ReleaseSemaphore(g_work_semaphore, count, NULL);
-    
-    // Wait for all tasks to complete
-    WaitForSingleObject(g_done_event, INFINITE);
-}
-
-// Destroy thread pool
-static void pool_destroy(void) {
-    if (!g_worker_threads) return;
-    
-    g_pool_shutdown = 1;
-    
-    // Wake all workers so they can exit
-    ReleaseSemaphore(g_work_semaphore, g_num_workers, NULL);
-    
-    for (int i = 0; i < g_num_workers; i++) {
-        WaitForSingleObject(g_worker_threads[i], INFINITE);
-        CloseHandle(g_worker_threads[i]);
-    }
-    
-    free(g_worker_threads);
-    g_worker_threads = NULL;
-    
-    CloseHandle(g_work_semaphore);
-    CloseHandle(g_done_event);
-    DeleteCriticalSection(&g_task_lock);
 }
 
 // =============================================================================
@@ -227,9 +74,6 @@ int main(int argc, char** argv)
     // -------------------------------------------------------------------------
     parse_args(argc, argv, &max_generations, &log_interval, &num_species,
                &pop_size, &num_threads, &verbose, &enable_logs, &enable_timers);
-
-    g_enable_logs = enable_logs;
-    g_enable_timers = enable_timers;
 
     // Auto-detect thread count
     if (num_threads <= 0) {
@@ -320,7 +164,7 @@ int main(int argc, char** argv)
     // -------------------------------------------------------------------------
     printf("[STEP 5] Creating thread pool...\n");
     
-    int pool_ok = pool_init(num_threads);
+    int pool_ok = ThreadPool_Init(num_threads);
     if (!pool_ok) {
         fprintf(stderr, "WARNING: Thread pool failed, using single thread\n");
         num_threads = 0;
@@ -365,7 +209,7 @@ int main(int argc, char** argv)
 
         // Execute evolution (parallel or serial)
         if (num_threads > 0) {
-            pool_run(tasks, num_species);
+            ThreadPool_Run(tasks, num_species, enable_logs, enable_timers);
         } else {
             for (int s = 0; s < num_species; s++) {
                 EvolveTask* tk = &tasks[s];
@@ -458,7 +302,7 @@ int main(int argc, char** argv)
     // -------------------------------------------------------------------------
     printf("[STEP 8] Cleanup...\n");
 
-    pool_destroy();
+    ThreadPool_Destroy();
     free(tasks);
     Free_Population(species, num_species, pop_size);
     Free_2DArray_Int(ranking, total_stations);

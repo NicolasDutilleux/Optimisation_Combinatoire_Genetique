@@ -11,6 +11,14 @@
 //   5. Apply local search (2-opt) to improve offspring
 //   6. Replace old population with new one
 //
+// TIMING: When enable_timers is ON, detailed timings are printed for each phase:
+//   - Evaluation: Computing fitness of all individuals
+//   - Sorting: Ranking individuals by fitness
+//   - Crossover: Creating offspring from parents
+//   - Mutation: Applying genetic mutations
+//   - TwoOpt: Local search optimization
+//   - Replace: Swapping old population with new
+//
 // =============================================================================
 
 #include "EvolveSpecie.h"
@@ -27,8 +35,11 @@
 #include <windows.h>
 
 // =============================================================================
-// TIMER HELPER (for profiling)
+// HIGH-RESOLUTION TIMER (Windows QueryPerformanceCounter)
 // =============================================================================
+// Uses CPU timestamp counter for microsecond precision.
+// Much more accurate than clock() for short operations.
+
 typedef struct {
     LARGE_INTEGER start;
     LARGE_INTEGER freq;
@@ -86,15 +97,21 @@ void EvolveSpecie(
     // Validation
     if (!specie || specie_size <= 0) return;
 
-    // Timing variables
+    // =========================================================================
+    // TIMING VARIABLES
+    // =========================================================================
     PerfTimer timer_total, timer_step;
-    double time_eval = 0, time_offspring = 0, time_replace = 0;
+    double time_eval = 0, time_sort = 0, time_crossover = 0;
+    double time_mutation = 0, time_twoopt = 0, time_replace = 0;
     
     if (enable_timers) perf_start(&timer_total);
 
     // =========================================================================
-    // STEP 1: EVALUATE ALL INDIVIDUALS
+    // STEP 1: EVALUATE ALL INDIVIDUALS (compute fitness/cost)
     // =========================================================================
+    // This is often the most expensive step. Uses cached costs when available.
+    // Optimization: Cost functions use stack allocation for small arrays.
+    
     if (enable_timers) perf_start(&timer_step);
     
     double* costs = (double*)malloc(specie_size * sizeof(double));
@@ -106,7 +123,7 @@ void EvolveSpecie(
             Individual_Init(&specie[i], 50);
         }
         
-        // Use cached cost if valid
+        // Use cached cost if valid (OPTIMIZATION: avoids recomputation)
         if (specie[i].cached_cost < 1e17) {
             costs[i] = specie[i].cached_cost;
         } else {
@@ -120,6 +137,10 @@ void EvolveSpecie(
     // =========================================================================
     // STEP 2: SORT BY FITNESS (best = lowest cost first)
     // =========================================================================
+    // Uses qsort with index tracking to avoid moving Individual structs.
+    
+    if (enable_timers) perf_start(&timer_step);
+    
     SortEntry* sorted = (SortEntry*)malloc(specie_size * sizeof(SortEntry));
     if (!sorted) {
         free(costs);
@@ -132,13 +153,15 @@ void EvolveSpecie(
     }
     qsort(sorted, specie_size, sizeof(SortEntry), compare_by_cost);
 
+    if (enable_timers) time_sort = perf_ms(&timer_step);
+
     if (enable_logs) {
         printf("[EVOLVE] Best: %.2f, Worst: %.2f\n", 
                sorted[0].cost, sorted[specie_size-1].cost);
     }
 
     // =========================================================================
-    // STEP 3: CREATE NEW POPULATION
+    // STEP 3: CREATE NEW POPULATION BUFFER
     // =========================================================================
     Individual* new_pop = (Individual*)malloc(specie_size * sizeof(Individual));
     if (!new_pop) {
@@ -159,19 +182,20 @@ void EvolveSpecie(
     }
 
     // =========================================================================
-    // STEP 4: GENERATE OFFSPRING
+    // STEP 4: GENERATE OFFSPRING (crossover + mutation + local search)
     // =========================================================================
-    if (enable_timers) perf_start(&timer_step);
-
     int num_offspring = specie_size - num_elites;
     
-    // Mating pool = top fraction of population
+    // Mating pool = top fraction of population (selection pressure)
     int pool_size = (int)(mating_pool_fraction * specie_size);
     if (pool_size < 2) pool_size = 2;
     if (pool_size > specie_size) pool_size = specie_size;
 
+    // Accumulators for detailed timing
+    double acc_crossover = 0, acc_mutation = 0, acc_twoopt = 0, acc_eval = 0;
+
     for (int i = 0; i < num_offspring; i++) {
-        // Select parents from mating pool
+        // Select parents from mating pool (tournament selection)
         int p1_idx = sorted[RandInt(0, pool_size - 1)].index;
         int p2_idx = sorted[RandInt(0, pool_size - 1)].index;
         Individual* parent1 = &specie[p1_idx];
@@ -179,6 +203,9 @@ void EvolveSpecie(
         Individual* child = &new_pop[num_elites + i];
 
         // ----- CROSSOVER -----
+        // Slice crossover: take a random slice from parent1, fill rest from parent2
+        if (enable_timers) perf_start(&timer_step);
+        
         int child_size = 0;
         int* child_ring = Slice_Crossover(
             parent1->active_ring, parent1->ring_size,
@@ -199,9 +226,13 @@ void EvolveSpecie(
             child->ring_size = child_size;
             free(child_ring);
         }
+        
+        if (enable_timers) acc_crossover += perf_ms(&timer_step);
 
         // ----- MUTATION -----
-        // Force mutation if child is identical to parent
+        // Force mutation if child is identical to parent (maintain diversity)
+        if (enable_timers) perf_start(&timer_step);
+        
         int identical = 0;
         if (child->ring_size == parent1->ring_size && child->ring_size > 0) {
             if (memcmp(child->active_ring, parent1->active_ring, 
@@ -218,17 +249,31 @@ void EvolveSpecie(
             Individual_Copy(child, &mutated);
             Individual_Free(&mutated);
         }
+        
+        if (enable_timers) acc_mutation += perf_ms(&timer_step);
 
         // ----- LOCAL SEARCH (2-OPT) -----
+        // Improves ring by reversing segments that reduce total distance
+        if (enable_timers) perf_start(&timer_step);
+        
         if (child->ring_size >= 3) {
             TwoOptImproveAlpha(child, alpha, dist, ranking);
         }
+        
+        if (enable_timers) acc_twoopt += perf_ms(&timer_step);
 
         // ----- EVALUATE CHILD -----
+        if (enable_timers) perf_start(&timer_step);
+        
         child->cached_cost = Total_Cost_Individual(alpha, child, total_stations, dist, ranking);
+        
+        if (enable_timers) acc_eval += perf_ms(&timer_step);
     }
 
-    if (enable_timers) time_offspring = perf_ms(&timer_step);
+    // Store accumulated times
+    time_crossover = acc_crossover;
+    time_mutation = acc_mutation;
+    time_twoopt = acc_twoopt;
 
     // =========================================================================
     // STEP 5: REPLACE OLD POPULATION
@@ -247,14 +292,21 @@ void EvolveSpecie(
     // =========================================================================
     free(costs);
     free(sorted);
-    free(new_pop);
+    free(new_pop);  // Note: Individual contents moved to specie[], don't free them
 
     // =========================================================================
     // TIMING REPORT
     // =========================================================================
     if (enable_timers) {
-        printf("[EVOLVE] eval=%.1fms offspring=%.1fms replace=%.1fms total=%.1fms\n",
-               time_eval, time_offspring, time_replace, perf_ms(&timer_total));
+        double total = perf_ms(&timer_total);
+        printf("[EVOLVE TIMERS]\n");
+        printf("  Evaluation:  %6.2f ms\n", time_eval);
+        printf("  Sorting:     %6.2f ms\n", time_sort);
+        printf("  Crossover:   %6.2f ms (total for %d offspring)\n", time_crossover, num_offspring);
+        printf("  Mutation:    %6.2f ms\n", time_mutation);
+        printf("  2-Opt:       %6.2f ms\n", time_twoopt);
+        printf("  Replace:     %6.2f ms\n", time_replace);
+        printf("  TOTAL:       %6.2f ms\n", total);
     }
 }
 
