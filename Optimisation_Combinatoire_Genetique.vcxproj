@@ -65,6 +65,7 @@
     <ClCompile Include="utils\Random.c" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="cost\Cost_explanation.md" />
     <None Include="README.md" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

@@ -1,8 +1,9 @@
-// main.c - Pure C version (refactored for readability)
+// main.c - Genetic Algorithm for Ring Optimization
+// Multi-threaded C implementation with Windows thread pool
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <windows.h>
 #include <process.h>
 
@@ -18,350 +19,460 @@
 #include "utils\hierarchy_and_print_utils.h"
 #include "utils\main_helpers.h"
 
-// global critical section to protect non-thread-safe calls
-static CRITICAL_SECTION evolve_cs;
+// =============================================================================
+// GLOBAL CONFIGURATION
+// =============================================================================
+static int g_enable_logs = 0;
+static int g_enable_timers = 0;
 
-// Worker parameter struct for thread per species
+// =============================================================================
+// HIGH-RESOLUTION TIMER (Windows QueryPerformanceCounter)
+// =============================================================================
 typedef struct {
-    Individual* ind; // pointer to the species individual (species[s])
-    int POP_SIZE;
+    LARGE_INTEGER start;
+    LARGE_INTEGER freq;
+} Timer;
+
+static void timer_start(Timer* t) {
+    QueryPerformanceFrequency(&t->freq);
+    QueryPerformanceCounter(&t->start);
+}
+
+static double timer_ms(Timer* t) {
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    return (double)(now.QuadPart - t->start.QuadPart) * 1000.0 / (double)t->freq.QuadPart;
+}
+
+// =============================================================================
+// EVOLUTION TASK STRUCTURE
+// =============================================================================
+typedef struct {
+    Individual* specie;
+    int pop_size;
     double** dist;
-    int** dist_ranking;
-    Node* node_vector;
+    int** ranking;
+    Node* nodes;
     int total_stations;
-    int ALPHA;
-    double MUTATION_RATE;
-    int ELITISM;
-    int ADD_PCT;
-    int REMOVE_PCT;
-    int SWAP_PCT;
-    int INV_PCT;
-    int SCR_PCT;
-    double extra_param;
-} WorkerParam;
+    int alpha;
+    double mutation_rate;
+    int elitism;
+    int add_pct, remove_pct, swap_pct, inv_pct, scr_pct;
+} EvolveTask;
 
-// Thread-pool globals
-static WorkerParam* task_array = NULL;
-static volatile LONG task_count = 0;
-static volatile LONG tasks_index = 0;
-static volatile LONG tasks_done = 0;
-static HANDLE* worker_handles = NULL;
-static int num_workers = 0;
-static volatile int pool_shutdown = 0;
-static HANDLE task_event = NULL; // event to signal worker threads
+// =============================================================================
+// SIMPLE THREAD POOL (producer-consumer pattern)
+// =============================================================================
+static EvolveTask* g_tasks = NULL;
+static int g_task_count = 0;
+static volatile LONG g_next_task = 0;
+static volatile LONG g_done_count = 0;
 
-static unsigned __stdcall pool_worker(void* arg)
-{
-    (void)arg;
-    while (!pool_shutdown) {
-        // wait until main signals tasks are available or shutdown
-        WaitForSingleObject(task_event, INFINITE);
-        if (pool_shutdown) break;
-        // consume available tasks
-        for (;;) {
-            long idx = InterlockedIncrement(&tasks_index) - 1;
-            if (idx >= task_count) break;
-            WorkerParam* p = &task_array[idx];
+static HANDLE* g_worker_threads = NULL;
+static int g_num_workers = 0;
+static volatile int g_pool_shutdown = 0;
+
+static HANDLE g_work_semaphore = NULL;   // Signals work available
+static HANDLE g_done_event = NULL;       // Signals all tasks complete
+static CRITICAL_SECTION g_task_lock;
+
+// Worker thread function
+static unsigned __stdcall worker_thread_func(void* arg) {
+    int worker_id = (int)(intptr_t)arg;
+    
+    while (!g_pool_shutdown) {
+        // Wait for work
+        DWORD wait_result = WaitForSingleObject(g_work_semaphore, 100);
+        
+        if (g_pool_shutdown) break;
+        if (wait_result == WAIT_TIMEOUT) continue;
+        
+        // Get next task
+        LONG task_idx = InterlockedIncrement(&g_next_task) - 1;
+        
+        if (task_idx < g_task_count) {
+            EvolveTask* task = &g_tasks[task_idx];
+            
+            // Execute evolution
             EvolveSpecie(
-                p->ind, p->POP_SIZE,
-                (const double**)p->dist,
-                (const int**)p->dist_ranking,
-                p->node_vector, p->total_stations,
-                p->ALPHA, p->total_stations,
-                p->MUTATION_RATE, p->ELITISM,
-                p->ADD_PCT, p->REMOVE_PCT, p->SWAP_PCT,
-                p->INV_PCT, p->SCR_PCT, p->extra_param);
-            InterlockedIncrement(&tasks_done);
+                task->specie, task->pop_size,
+                (const double**)task->dist, (const int**)task->ranking,
+                task->nodes, task->total_stations,
+                task->alpha, task->total_stations,
+                task->mutation_rate, task->elitism,
+                task->add_pct, task->remove_pct, task->swap_pct,
+                task->inv_pct, task->scr_pct, 0.5,
+                g_enable_logs, g_enable_timers
+            );
+            
+            // Signal completion
+            LONG done = InterlockedIncrement(&g_done_count);
+            if (done >= g_task_count) {
+                SetEvent(g_done_event);
+            }
         }
-        // finished consuming tasks; worker will wait again
     }
+    
     return 0;
 }
 
-// Initialize pool with given worker count
-static int pool_init(int workers)
-{
-    if (workers <= 0) return 0;
-    num_workers = workers;
-    worker_handles = (HANDLE*)malloc(num_workers * sizeof(HANDLE));
-    if (!worker_handles) return 0;
-    // create manual-reset event; initially non-signaled
-    task_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-    if (!task_event) { free(worker_handles); worker_handles = NULL; num_workers = 0; return 0; }
-    for (int i = 0; i < num_workers; ++i) {
-        unsigned threadId;
-        worker_handles[i] = (HANDLE)_beginthreadex(NULL, 0, pool_worker, NULL, 0, &threadId);
-        if (!worker_handles[i]) {
-            // cleanup
-            for (int j = 0; j < i; ++j) CloseHandle(worker_handles[j]);
-            CloseHandle(task_event); task_event = NULL;
-            free(worker_handles); worker_handles = NULL; num_workers = 0; return 0;
+// Create thread pool
+static int pool_init(int num_workers) {
+    g_num_workers = num_workers;
+    g_pool_shutdown = 0;
+    
+    InitializeCriticalSection(&g_task_lock);
+    
+    // Semaphore: max count = large number, initial = 0
+    g_work_semaphore = CreateSemaphore(NULL, 0, 10000, NULL);
+    g_done_event = CreateEvent(NULL, TRUE, FALSE, NULL);  // Manual reset
+    
+    if (!g_work_semaphore || !g_done_event) return 0;
+    
+    g_worker_threads = (HANDLE*)malloc(num_workers * sizeof(HANDLE));
+    if (!g_worker_threads) return 0;
+    
+    for (int i = 0; i < num_workers; i++) {
+        unsigned tid;
+        g_worker_threads[i] = (HANDLE)_beginthreadex(
+            NULL, 0, worker_thread_func, (void*)(intptr_t)i, 0, &tid
+        );
+        if (!g_worker_threads[i]) {
+            g_pool_shutdown = 1;
+            for (int j = 0; j < i; j++) {
+                WaitForSingleObject(g_worker_threads[j], INFINITE);
+                CloseHandle(g_worker_threads[j]);
+            }
+            free(g_worker_threads);
+            g_worker_threads = NULL;
+            return 0;
         }
     }
+    
     return 1;
 }
 
-static void pool_shutdown_and_wait(void)
-{
-    pool_shutdown = 1;
-    // wake all workers so they can exit
-    if (task_event) SetEvent(task_event);
-    for (int i = 0; i < num_workers; ++i) {
-        WaitForSingleObject(worker_handles[i], INFINITE);
-        CloseHandle(worker_handles[i]);
-    }
-    free(worker_handles); worker_handles = NULL; num_workers = 0;
-    if (task_event) { CloseHandle(task_event); task_event = NULL; }
+// Submit tasks and wait for completion
+static void pool_run(EvolveTask* tasks, int count) {
+    g_tasks = tasks;
+    g_task_count = count;
+    g_next_task = 0;
+    g_done_count = 0;
+    
+    ResetEvent(g_done_event);
+    
+    // Release semaphore 'count' times to wake workers
+    ReleaseSemaphore(g_work_semaphore, count, NULL);
+    
+    // Wait for all tasks to complete
+    WaitForSingleObject(g_done_event, INFINITE);
 }
 
-// Add evaluation worker globals
-static volatile LONG eval_index = 0;
-
-typedef struct {
-    Individual** species;
-    int NUM_SPECIES;
-    int POP_SIZE;
-    double** dist;
-    int** dist_ranking;
-    int total_stations;
-    int ALPHA;
-    SpeciesCostLocal* out;
-} EvalArgs;
-
-static unsigned __stdcall EvalWorker(void* arg)
-{
-    EvalArgs* a = (EvalArgs*)arg;
-    if (!a) return 0;
-    for (;;) {
-        long idx = InterlockedIncrement(&eval_index) - 1;
-        if (idx >= a->NUM_SPECIES) break;
-        int s = (int)idx;
-        double* costs = Total_Cost_Specie(a->ALPHA, a->species[s], a->POP_SIZE, a->total_stations, (const double**)a->dist, (const int**)a->dist_ranking);
-        if (!costs) {
-            a->out[s].cost = 1e18;
-            a->out[s].best_idx = -1;
-        } else {
-            int best_idx = Select_Best(costs, a->POP_SIZE);
-            a->out[s].cost = costs[best_idx];
-            a->out[s].best_idx = best_idx;
-            free(costs);
-        }
-        a->out[s].species_id = s;
-        InterlockedIncrement(&tasks_done); // reuse tasks_done as completed-counter
+// Destroy thread pool
+static void pool_destroy(void) {
+    if (!g_worker_threads) return;
+    
+    g_pool_shutdown = 1;
+    
+    // Wake all workers so they can exit
+    ReleaseSemaphore(g_work_semaphore, g_num_workers, NULL);
+    
+    for (int i = 0; i < g_num_workers; i++) {
+        WaitForSingleObject(g_worker_threads[i], INFINITE);
+        CloseHandle(g_worker_threads[i]);
     }
-    return 0;
+    
+    free(g_worker_threads);
+    g_worker_threads = NULL;
+    
+    CloseHandle(g_work_semaphore);
+    CloseHandle(g_done_event);
+    DeleteCriticalSection(&g_task_lock);
 }
 
-// -------------------------------------------------------------
-
+// =============================================================================
+// MAIN PROGRAM
+// =============================================================================
 int main(int argc, char** argv)
 {
-    clock_t start_total = clock();
+    printf("============================================\n");
+    printf("  GENETIC ALGORITHM - RING OPTIMIZATION\n");
+    printf("============================================\n\n");
 
-    printf("[MAIN] Starting program...\n");
+    Timer total_timer;
+    timer_start(&total_timer);
 
-    // initialize critical section for thread synchronization
-    InitializeCriticalSection(&evolve_cs);
-
-    int max_generations = 10000; // default
-    int LOG_INTERVAL = 50; // report less frequently to reduce overhead
+    // -------------------------------------------------------------------------
+    // DEFAULT PARAMETERS
+    // -------------------------------------------------------------------------
+    int max_generations = 10000;
+    int log_interval = 50;
     int verbose = 0;
+    
+    int num_species = 100;
+    int pop_size = 50;
+    double mutation_rate = 0.25;
+    int alpha = 3;
+    int elitism = 0;
+    
+    int add_pct = 15, remove_pct = 10, swap_pct = 15;
+    int inv_pct = 5, scr_pct = 5;
+    
+    int num_threads = 0;
+    int enable_logs = 0;
+    int enable_timers = 0;
 
-    // GA parameters (keep same logic as C++ original)
-    int NUM_SPECIES = 100;
-    int POP_SIZE = 50;
-    double MUTATION_RATE = 0.25;
-    const int ALPHA = 3;
-    const int ELITISM = 0;
+    // -------------------------------------------------------------------------
+    // PARSE COMMAND LINE
+    // -------------------------------------------------------------------------
+    parse_args(argc, argv, &max_generations, &log_interval, &num_species,
+               &pop_size, &num_threads, &verbose, &enable_logs, &enable_timers);
 
-    int ADD_PCT = 15;
-    int REMOVE_PCT = 10;
-    int SWAP_PCT = 15;
-    const int INV_PCT = 5;
-    const int SCR_PCT = 5;
+    g_enable_logs = enable_logs;
+    g_enable_timers = enable_timers;
 
-    int requested_workers = 0; // default 0 = no threading
+    // Auto-detect thread count
+    if (num_threads <= 0) {
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        num_threads = si.dwNumberOfProcessors;
+        if (num_threads > num_species) num_threads = num_species;
+    }
 
-    // parse command-line and update values
-    parse_args(argc, argv, &max_generations, &LOG_INTERVAL, &NUM_SPECIES, &POP_SIZE, &requested_workers, &verbose);
+    printf("[CONFIG]\n");
+    printf("  Generations: %d\n", max_generations);
+    printf("  Species:     %d\n", num_species);
+    printf("  Population:  %d per species\n", pop_size);
+    printf("  Threads:     %d\n", num_threads);
+    printf("  Logs:        %s\n", enable_logs ? "ON" : "OFF");
+    printf("  Timers:      %s\n\n", enable_timers ? "ON" : "OFF");
 
-    print_now("Starting dataset load");
-
-    // Load dataset
+    // -------------------------------------------------------------------------
+    // STEP 1: LOAD DATASET
+    // -------------------------------------------------------------------------
+    printf("[STEP 1] Loading dataset...\n");
+    
     int total_stations = 0;
-    Node* node_vector = readDataset("data\\127\\127_data.txt", &total_stations);
-    if (!node_vector || total_stations == 0) {
-        fprintf(stderr, "Error: could not read dataset\n");
+    Node* nodes = readDataset("data\\51\\51_data.txt", &total_stations);
+    
+    if (!nodes || total_stations == 0) {
+        fprintf(stderr, "ERROR: Failed to load dataset\n");
         return 1;
     }
+    printf("         %d stations loaded\n\n", total_stations);
 
-    print_now("Dataset loaded");
-    fflush(stdout);
-    if (verbose) { printf("  Nodes loaded: %d\n", total_stations); fflush(stdout); }
-
-    // Compute distance matrix
-    print_now("Computing distance matrix"); fflush(stdout);
-    clock_t t0 = clock();
-    double** dist = Compute_Distances_2DVector(node_vector, total_stations);
-    clock_t t1 = clock();
+    // -------------------------------------------------------------------------
+    // STEP 2: COMPUTE DISTANCE MATRIX
+    // -------------------------------------------------------------------------
+    printf("[STEP 2] Computing distance matrix...\n");
+    
+    Timer t;
+    timer_start(&t);
+    double** dist = Compute_Distances_2DVector(nodes, total_stations);
+    
     if (!dist) {
-        fprintf(stderr, "Error: distance computation failed\n"); fflush(stderr);
-        free(node_vector);
+        fprintf(stderr, "ERROR: Distance computation failed\n");
+        free(nodes);
         return 1;
     }
-    if (verbose) { printf("  Distance matrix computed in %ld ms\n", (long)((t1 - t0) * 1000 / CLOCKS_PER_SEC)); fflush(stdout); }
+    printf("         Done (%.1f ms)\n\n", timer_ms(&t));
 
-    // Compute ranking
-    print_now("Computing distance ranking"); fflush(stdout);
-    t0 = clock();
-    int** dist_ranking = Distance_Ranking_2DVector(dist, total_stations, total_stations);
-    t1 = clock();
-    if (!dist_ranking) {
-        fprintf(stderr, "Error: ranking computation failed\n"); fflush(stdout);
+    // -------------------------------------------------------------------------
+    // STEP 3: COMPUTE DISTANCE RANKING
+    // -------------------------------------------------------------------------
+    printf("[STEP 3] Computing distance ranking...\n");
+    
+    timer_start(&t);
+    int** ranking = Distance_Ranking_2DVector(dist, total_stations, total_stations);
+    
+    if (!ranking) {
+        fprintf(stderr, "ERROR: Ranking computation failed\n");
         Free_2DArray_Double(dist, total_stations);
-        free(node_vector);
+        free(nodes);
         return 1;
     }
-    if (verbose) { printf("  Ranking computed in %ld ms\n", (long)((t1 - t0) * 1000 / CLOCKS_PER_SEC)); fflush(stdout); }
+    printf("         Done (%.1f ms)\n\n", timer_ms(&t));
 
+    // -------------------------------------------------------------------------
+    // STEP 4: INITIALIZE POPULATION
+    // -------------------------------------------------------------------------
+    printf("[STEP 4] Initializing population...\n");
+    
     RNG_Init();
-
-    // Initialize species
-    print_now("Initializing population");
-    t0 = clock();
+    timer_start(&t);
+    
     int species_count = 0;
-    Individual** species = Random_Generation(node_vector, total_stations, NUM_SPECIES, POP_SIZE, &species_count);
-    t1 = clock();
+    Individual** species = Random_Generation(nodes, total_stations, 
+                                              num_species, pop_size, &species_count);
+    
     if (!species) {
-        fprintf(stderr, "Error: population initialization failed\n");
-        Free_2DArray_Int(dist_ranking, total_stations);
+        fprintf(stderr, "ERROR: Population initialization failed\n");
+        Free_2DArray_Int(ranking, total_stations);
         Free_2DArray_Double(dist, total_stations);
-        free(node_vector);
+        free(nodes);
         return 1;
     }
-    if (verbose) printf("  Population initialized in %ld ms\n", (long)((t1 - t0) * 1000 / CLOCKS_PER_SEC));
+    printf("         %d species x %d individuals (%.1f ms)\n\n", 
+           num_species, pop_size, timer_ms(&t));
 
-    // Start thread pool if requested
-    if (requested_workers > 0) {
-        int ok = pool_init(requested_workers);
-        if (!ok) {
-            fprintf(stderr, "Warning: thread pool initialization failed, running single-threaded\n");
-            requested_workers = 0;
-        } else {
-            num_workers = requested_workers;
-            if (verbose) printf("Thread pool started with %d workers\n", num_workers);
-        }
+    // -------------------------------------------------------------------------
+    // STEP 5: CREATE THREAD POOL
+    // -------------------------------------------------------------------------
+    printf("[STEP 5] Creating thread pool...\n");
+    
+    int pool_ok = pool_init(num_threads);
+    if (!pool_ok) {
+        fprintf(stderr, "WARNING: Thread pool failed, using single thread\n");
+        num_threads = 0;
     }
+    printf("         %d worker threads ready\n\n", num_threads);
 
-    print_now("Starting evolution loop");
+    // Pre-allocate task array
+    EvolveTask* tasks = (EvolveTask*)malloc(num_species * sizeof(EvolveTask));
 
-    double old_best = 1e18;
-    int stagnation_count = 0;
-    double base_mutation_rate = MUTATION_RATE;
-    int stagnation_patience = 50; // increased patience
+    // -------------------------------------------------------------------------
+    // STEP 6: EVOLUTION LOOP
+    // -------------------------------------------------------------------------
+    printf("[STEP 6] Starting evolution...\n");
+    printf("============================================\n\n");
 
-    for (int gen = 0; gen < max_generations; ++gen) {
-        int log_detailed = (gen % LOG_INTERVAL == 0);
-        clock_t gen_start = clock();
+    double best_cost = 1e18;
+    int stagnation = 0;
+    int stagnation_limit = 50;
 
-        // Evolve all species and measure evolution time
-        clock_t evolve_start = clock();
-        long evolve_time = 0;
-        // Use thread-pool if initialized, otherwise run serial
-        if (num_workers > 0) {
-            // build tasks
-            if (task_array) { free(task_array); task_array = NULL; }
-            task_array = (WorkerParam*)malloc(NUM_SPECIES * sizeof(WorkerParam));
-            task_count = NUM_SPECIES; tasks_index = 0; tasks_done = 0; pool_shutdown = 0;
-            for (int s = 0; s < NUM_SPECIES; ++s) {
-                task_array[s].ind = species[s];
-                task_array[s].POP_SIZE = POP_SIZE;
-                task_array[s].dist = dist;
-                task_array[s].dist_ranking = dist_ranking;
-                task_array[s].node_vector = node_vector;
-                task_array[s].total_stations = total_stations;
-                task_array[s].ALPHA = ALPHA;
-                task_array[s].MUTATION_RATE = MUTATION_RATE;
-                task_array[s].ELITISM = ELITISM;
-                task_array[s].ADD_PCT = ADD_PCT;
-                task_array[s].REMOVE_PCT = REMOVE_PCT;
-                task_array[s].SWAP_PCT = SWAP_PCT;
-                task_array[s].INV_PCT = INV_PCT;
-                task_array[s].SCR_PCT = SCR_PCT;
-                task_array[s].extra_param = 0.5;
-            }
-            // signal workers that tasks are available
-            InterlockedExchange(&tasks_done, 0);
-            InterlockedExchange(&tasks_index, 0);
-            // set the event to wake workers
-            SetEvent(task_event);
-            // wait for workers to finish tasks
-            while (tasks_done < task_count) Sleep(1);
-            // reset event so workers will wait next time
-            ResetEvent(task_event);
-            clock_t evolve_end = clock();
-            evolve_time = (long)((evolve_end - evolve_start) * 1000 / CLOCKS_PER_SEC);
-        } else {
-            // serial fallback: evolve species one by one
-            for (int s = 0; s < NUM_SPECIES; ++s) {
-                EvolveSpecie(
-                    species[s], POP_SIZE,
-                    (const double**)dist,
-                    (const int**)dist_ranking,
-                    node_vector, total_stations,
-                    ALPHA, total_stations,
-                    MUTATION_RATE, ELITISM,
-                    ADD_PCT, REMOVE_PCT, SWAP_PCT,
-                    INV_PCT, SCR_PCT, 0.5);
-            }
-            clock_t evolve_end = clock();
-            evolve_time = (long)((evolve_end - evolve_start) * 1000 / CLOCKS_PER_SEC);
+    for (int gen = 0; gen < max_generations; gen++) {
+        
+        Timer gen_timer;
+        timer_start(&gen_timer);
+
+        // Build task list
+        for (int s = 0; s < num_species; s++) {
+            tasks[s].specie = species[s];
+            tasks[s].pop_size = pop_size;
+            tasks[s].dist = dist;
+            tasks[s].ranking = ranking;
+            tasks[s].nodes = nodes;
+            tasks[s].total_stations = total_stations;
+            tasks[s].alpha = alpha;
+            tasks[s].mutation_rate = mutation_rate;
+            tasks[s].elitism = elitism;
+            tasks[s].add_pct = add_pct;
+            tasks[s].remove_pct = remove_pct;
+            tasks[s].swap_pct = swap_pct;
+            tasks[s].inv_pct = inv_pct;
+            tasks[s].scr_pct = scr_pct;
         }
 
-        // Detailed reporting every LOG_INTERVAL generations
-        if (log_detailed) {
-            evaluate_and_report(gen, NUM_SPECIES, POP_SIZE, dist, dist_ranking, node_vector, total_stations, ALPHA, species, &old_best, &stagnation_count, &MUTATION_RATE);
-            if (stagnation_count > stagnation_patience) {
-                printf("  [STAGNATION] stopping early at generation %d\n", gen);
+        // Execute evolution (parallel or serial)
+        if (num_threads > 0) {
+            pool_run(tasks, num_species);
+        } else {
+            for (int s = 0; s < num_species; s++) {
+                EvolveTask* tk = &tasks[s];
+                EvolveSpecie(
+                    tk->specie, tk->pop_size,
+                    (const double**)tk->dist, (const int**)tk->ranking,
+                    tk->nodes, tk->total_stations,
+                    tk->alpha, tk->total_stations,
+                    tk->mutation_rate, tk->elitism,
+                    tk->add_pct, tk->remove_pct, tk->swap_pct,
+                    tk->inv_pct, tk->scr_pct, 0.5,
+                    enable_logs, enable_timers
+                );
+            }
+        }
+
+        // Progress report
+        if (gen % log_interval == 0) {
+            evaluate_and_report(
+                gen, num_species, pop_size, dist, ranking,
+                nodes, total_stations, alpha, species,
+                &best_cost, &stagnation, &mutation_rate,
+                enable_logs, enable_timers
+            );
+            
+            if (stagnation > stagnation_limit) {
+                printf("\n[STOP] Stagnation after %d generations\n", stagnation);
                 break;
             }
         }
 
-        if (verbose) {
-            clock_t gen_end = clock();
-            printf("  Generation %d took %ld ms\n", gen, (long)((gen_end - gen_start) * 1000 / CLOCKS_PER_SEC));
+        // Generation timer
+        if (enable_timers) {
+            printf("[TIMER] Gen %d: %.1f ms\n", gen, timer_ms(&gen_timer));
+        }
+
+        // Progress dots
+        if (!enable_logs && !enable_timers && gen % 10 == 0) {
+            printf(".");
+            fflush(stdout);
+            if (gen % 100 == 0 && gen > 0) {
+                printf(" [gen %d]\n", gen);
+            }
         }
     }
 
-    // Final reporting (same logic as C++)
-    double final_best_cost = 1e18;
-    int final_best_species = 0;
-    int final_best_index = 0;
+    printf("\n\n");
 
-    for (int s = 0; s < NUM_SPECIES; ++s) {
-        double* costs = Total_Cost_Specie(ALPHA, species[s], POP_SIZE, total_stations, (const double**)dist, (const int**)dist_ranking);
-        int best_idx = Select_Best(costs, POP_SIZE);
-        if (costs[best_idx] < final_best_cost) {
-            final_best_cost = costs[best_idx];
-            final_best_species = s;
-            final_best_index = best_idx;
+    // -------------------------------------------------------------------------
+    // STEP 7: FINAL RESULTS
+    // -------------------------------------------------------------------------
+    printf("============================================\n");
+    printf("[STEP 7] Final evaluation\n\n");
+
+    double final_best = 1e18;
+    int best_species = 0, best_idx = 0;
+
+    for (int s = 0; s < num_species; s++) {
+        double* costs = Total_Cost_Specie(alpha, species[s], pop_size,
+                                          total_stations,
+                                          (const double**)dist,
+                                          (const int**)ranking);
+        if (costs) {
+            int idx = Select_Best(costs, pop_size);
+            if (costs[idx] < final_best) {
+                final_best = costs[idx];
+                best_species = s;
+                best_idx = idx;
+            }
+            free(costs);
         }
-        free(costs);
     }
 
-    printf("Final best cost: %.2f (species %d, idx %d)\n", final_best_cost, final_best_species, final_best_index);
+    printf("  BEST SOLUTION\n");
+    printf("  -------------\n");
+    printf("  Cost:    %.2f\n", final_best);
+    printf("  Species: %d\n", best_species);
+    printf("  Index:   %d\n", best_idx);
+    
+    Individual* best = &species[best_species][best_idx];
+    printf("  Ring:    ");
+    for (int i = 0; i < best->ring_size && i < 15; i++) {
+        printf("%d ", best->active_ring[i]);
+    }
+    if (best->ring_size > 15) printf("...");
+    printf("\n  Size:    %d nodes\n\n", best->ring_size);
 
-    // Cleanup
-    Free_Population(species, NUM_SPECIES, POP_SIZE);
-    Free_2DArray_Int(dist_ranking, total_stations);
+    // -------------------------------------------------------------------------
+    // STEP 8: CLEANUP
+    // -------------------------------------------------------------------------
+    printf("[STEP 8] Cleanup...\n");
+
+    pool_destroy();
+    free(tasks);
+    Free_Population(species, num_species, pop_size);
+    Free_2DArray_Int(ranking, total_stations);
     Free_2DArray_Double(dist, total_stations);
-    free(node_vector);
-    if (task_array) { free(task_array); task_array = NULL; }
+    free(nodes);
 
-    // before exiting program, delete critical section and shutdown pool
-    if (num_workers > 0) {
-        pool_shutdown_and_wait();
-    }
-    DeleteCriticalSection(&evolve_cs);
+    printf("         Done\n\n");
+
+    // -------------------------------------------------------------------------
+    // SUMMARY
+    // -------------------------------------------------------------------------
+    printf("============================================\n");
+    printf("  TOTAL TIME: %.1f seconds\n", timer_ms(&total_timer) / 1000.0);
+    printf("============================================\n");
+
     return 0;
 }
