@@ -1,4 +1,7 @@
 // genetic/Mutation.c - Optimized with stack allocation
+//
+// IMPORTANT: Le nœud 1 (dépôt) ne doit JAMAIS être supprimé du ring !
+//
 #include "Mutation.h"
 #include "utils\Random.h"
 #include <stdlib.h>
@@ -99,7 +102,17 @@ void Mutation_Remove_Node(Individual* ind, int min_ring_size)
 {
     if (!ind || ind->ring_size <= min_ring_size) return;
     
-    int idx = RandInt(0, ind->ring_size - 1);
+    // IMPORTANT: Ne JAMAIS supprimer le dépôt (nœud 1)
+    // Trouver un index qui n'est PAS le dépôt
+    int attempts = 0;
+    int idx;
+    
+    do {
+        idx = RandInt(0, ind->ring_size - 1);
+        attempts++;
+        // Si on ne trouve pas d'autre nœud après 10 essais, abandonner
+        if (attempts > 10) return;
+    } while (ind->active_ring[idx] == 1);
     
     for (int i = idx; i < ind->ring_size - 1; ++i) {
         ind->active_ring[i] = ind->active_ring[i + 1];
@@ -111,6 +124,8 @@ void Mutation_Swap_Simple(Individual* ind)
 {
     if (!ind || ind->ring_size < 2) return;
     
+    // IMPORTANT: Ne PAS échanger le dépôt (nœud 1) - trouver deux indices non-dépôt
+    // Mais le swap ne supprime pas le dépôt, donc c'est OK de swap sa position
     int a = RandInt(0, ind->ring_size - 1);
     int b = RandInt(0, ind->ring_size - 1);
     
@@ -174,6 +189,23 @@ void Mutations(Individual* out_individual,
     }
     if (RandInt(1, 100) <= scramble_percentage) {
         Mutation_Scramble(out_individual);
+    }
+    
+    // SÉCURITÉ : S'assurer que le dépôt (nœud 1) est dans le ring
+    int has_depot = 0;
+    for (int i = 0; i < out_individual->ring_size; i++) {
+        if (out_individual->active_ring[i] == 1) {
+            has_depot = 1;
+            break;
+        }
+    }
+    if (!has_depot && out_individual->ring_size < out_individual->ring_capacity) {
+        // Ajouter le dépôt au début
+        for (int i = out_individual->ring_size; i > 0; i--) {
+            out_individual->active_ring[i] = out_individual->active_ring[i - 1];
+        }
+        out_individual->active_ring[0] = 1;
+        out_individual->ring_size++;
     }
     
     out_individual->cached_cost = 1e18;

@@ -1,8 +1,11 @@
 // main.c - Genetic Algorithm for Ring Optimization
 // Entry point and orchestration
 
+#define _CRT_SECURE_NO_WARNINGS  // Disable MSVC security warnings for scanf/sprintf
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <windows.h>
 
 #include "core\Node.h"
@@ -11,6 +14,7 @@
 #include "utils\Distance.h"
 #include "utils\Random.h"
 #include "utils\ThreadPool.h"
+#include "utils\Visualize.h"
 #include "evolution\EvolveSpecie.h"
 #include "cost\Cost.h"
 #include "genetic\Selection.h"
@@ -37,6 +41,10 @@ static double timer_ms(Timer* t) {
     return (double)(now.QuadPart - t->start.QuadPart) * 1000.0 / (double)t->freq.QuadPart;
 }
 
+static double timer_seconds(Timer* t) {
+    return timer_ms(t) / 1000.0;
+}
+
 // =============================================================================
 // MAIN PROGRAM
 // =============================================================================
@@ -46,21 +54,56 @@ int main(int argc, char** argv)
     printf("  GENETIC ALGORITHM - RING OPTIMIZATION\n");
     printf("============================================\n\n");
 
+    // -------------------------------------------------------------------------
+    // USER INPUT: Time limit, Dataset, Alpha
+    // -------------------------------------------------------------------------
+    double time_limit_seconds;
+    int alpha;
+    int dataset_num;
+    char dataset_path[256];
+
+    printf("Time limit in seconds (e.g., 58): ");
+    if (scanf("%lf", &time_limit_seconds) != 1 || time_limit_seconds <= 0) {
+        fprintf(stderr, "ERROR: Invalid time limit\n");
+        return 1;
+    }
+
+    printf("Available datasets: 51, 100, 127, 225\n");
+    printf("Dataset number: ");
+    if (scanf("%d", &dataset_num) != 1) {
+        fprintf(stderr, "ERROR: Invalid dataset number\n");
+        return 1;
+    }
+
+    printf("Alpha (3, 5, 7, 9): ");
+    if (scanf("%d", &alpha) != 1 || (alpha != 3 && alpha != 5 && alpha != 7 && alpha != 9)) {
+        fprintf(stderr, "ERROR: Alpha must be 3, 5, 7, or 9\n");
+        return 1;
+    }
+
+    // Build dataset path: data\{num}\{num}_data.txt
+    sprintf(dataset_path, "data\\%d\\%d_data.txt", dataset_num, dataset_num);
+    
+    printf("\n");
+
+    // Start the timer AFTER user input
     Timer total_timer;
     timer_start(&total_timer);
 
     // -------------------------------------------------------------------------
     // DEFAULT PARAMETERS
     // -------------------------------------------------------------------------
-    int max_generations = 10000;
+    int max_generations = 1000000;  // Very high - will stop by time limit
     int log_interval = 50;
     int verbose = 0;
     
-    int num_species = 100;
-    int pop_size = 50;
-    double mutation_rate = 0.25;
-    int alpha = 3;
-    int elitism = 0;
+    int num_species = 30;
+    int pop_size = 180;
+    double mutation_rate = 0.30;
+    
+    // ÉLITISME : 5% des meilleurs survivent
+    int elitism = (pop_size * 5) / 100;
+    if (elitism < 1) elitism = 1;
     
     int add_pct = 15, remove_pct = 10, swap_pct = 15;
     int inv_pct = 5, scr_pct = 5;
@@ -70,10 +113,14 @@ int main(int argc, char** argv)
     int enable_timers = 0;
 
     // -------------------------------------------------------------------------
-    // PARSE COMMAND LINE
+    // PARSE COMMAND LINE (optional overrides)
     // -------------------------------------------------------------------------
     parse_args(argc, argv, &max_generations, &log_interval, &num_species,
                &pop_size, &num_threads, &verbose, &enable_logs, &enable_timers);
+
+    // Recalculate elitism after pop_size might have changed
+    elitism = (pop_size * 5) / 100;
+    if (elitism < 1) elitism = 1;
 
     // Auto-detect thread count
     if (num_threads <= 0) {
@@ -84,12 +131,13 @@ int main(int argc, char** argv)
     }
 
     printf("[CONFIG]\n");
-    printf("  Generations: %d\n", max_generations);
+    printf("  Time limit:  %.1f seconds\n", time_limit_seconds);
+    printf("  Dataset:     %s\n", dataset_path);
+    printf("  Alpha:       %d\n", alpha);
     printf("  Species:     %d\n", num_species);
     printf("  Population:  %d per species\n", pop_size);
-    printf("  Threads:     %d\n", num_threads);
-    printf("  Logs:        %s\n", enable_logs ? "ON" : "OFF");
-    printf("  Timers:      %s\n\n", enable_timers ? "ON" : "OFF");
+    printf("  Elitism:     %d (top individuals preserved)\n", elitism);
+    printf("  Threads:     %d\n\n", num_threads);
 
     // -------------------------------------------------------------------------
     // STEP 1: LOAD DATASET
@@ -97,10 +145,10 @@ int main(int argc, char** argv)
     printf("[STEP 1] Loading dataset...\n");
     
     int total_stations = 0;
-    Node* nodes = readDataset("data\\51\\51_data.txt", &total_stations);
+    Node* nodes = readDataset(dataset_path, &total_stations);
     
     if (!nodes || total_stations == 0) {
-        fprintf(stderr, "ERROR: Failed to load dataset\n");
+        fprintf(stderr, "ERROR: Failed to load dataset '%s'\n", dataset_path);
         return 1;
     }
     printf("         %d stations loaded\n\n", total_stations);
@@ -156,8 +204,19 @@ int main(int argc, char** argv)
         free(nodes);
         return 1;
     }
-    printf("         %d species x %d individuals (%.1f ms)\n\n", 
+    printf("         %d species x %d individuals (%.1f ms)\n", 
            num_species, pop_size, timer_ms(&t));
+
+    // -------------------------------------------------------------------------
+    // STEP 4b: APPLY 2-OPT TO PART OF INITIAL POPULATION
+    // -------------------------------------------------------------------------
+    printf("         Applying 2-Opt (exhaustive) to 20%% of species...\n");
+    timer_start(&t);
+    
+    Apply_TwoOpt_To_Population(species, num_species, pop_size, alpha,
+                               (const double**)dist, (const int**)ranking);
+    
+    printf("         Done (%.1f ms)\n\n", timer_ms(&t));
 
     // -------------------------------------------------------------------------
     // STEP 5: CREATE THREAD POOL
@@ -175,20 +234,20 @@ int main(int argc, char** argv)
     EvolveTask* tasks = (EvolveTask*)malloc(num_species * sizeof(EvolveTask));
 
     // -------------------------------------------------------------------------
-    // STEP 6: EVOLUTION LOOP
+    // STEP 6: EVOLUTION LOOP (with time limit)
     // -------------------------------------------------------------------------
-    printf("[STEP 6] Starting evolution...\n");
+    printf("[STEP 6] Starting evolution (time limit: %.1f s)...\n", time_limit_seconds);
     printf("============================================\n\n");
 
     double best_cost = 1e18;
     int stagnation = 0;
     int stagnation_limit = 50;
+    int gen = 0;
+    int visualization_done = 0;  // Flag pour ne visualiser qu'une seule fois
 
-    for (int gen = 0; gen < max_generations; gen++) {
+    // Evolution loop - stops when time limit is reached
+    while (timer_seconds(&total_timer) < time_limit_seconds) {
         
-        Timer gen_timer;
-        timer_start(&gen_timer);
-
         // Build task list
         for (int s = 0; s < num_species; s++) {
             tasks[s].specie = species[s];
@@ -235,28 +294,52 @@ int main(int argc, char** argv)
                 enable_logs, enable_timers
             );
             
-            if (stagnation > stagnation_limit) {
-                printf("\n[STOP] Stagnation after %d generations\n", stagnation);
-                break;
+            // Show remaining time
+            double elapsed = timer_seconds(&total_timer);
+            double remaining = time_limit_seconds - elapsed;
+            printf("  Time: %.1f s elapsed, %.1f s remaining\n\n", elapsed, remaining);
+            
+            // Visualize ONCE when stagnation reaches limit for the first time
+            if (stagnation >= stagnation_limit && !visualization_done) {
+                printf("\n[STAGNATION] Reached %d - generating visualization...\n", stagnation);
+                
+                // Find the best individual for visualization
+                double viz_best_cost = 1e18;
+                int viz_best_species = 0, viz_best_idx = 0;
+                
+                for (int s = 0; s < num_species; s++) {
+                    double* costs = Total_Cost_Specie(alpha, species[s], pop_size,
+                                                      total_stations,
+                                                      (const double**)dist,
+                                                      (const int**)ranking);
+                    if (costs) {
+                        int idx = Select_Best(costs, pop_size);
+                        if (costs[idx] < viz_best_cost) {
+                            viz_best_cost = costs[idx];
+                            viz_best_species = s;
+                            viz_best_idx = idx;
+                        }
+                        free(costs);
+                    }
+                }
+                
+                // Generate visualization (only once)
+                Visualize_Ring(&species[viz_best_species][viz_best_idx], nodes, 
+                              total_stations, viz_best_cost, alpha, gen);
+                
+                visualization_done = 1;  // Ne plus visualiser après
+                
+                // Reset stagnation to continue evolution
+                stagnation = 0;
+                printf("[STAGNATION] Reset - continuing evolution...\n\n");
             }
         }
 
-        // Generation timer
-        if (enable_timers) {
-            printf("[TIMER] Gen %d: %.1f ms\n", gen, timer_ms(&gen_timer));
-        }
-
-        // Progress dots
-        if (!enable_logs && !enable_timers && gen % 10 == 0) {
-            printf(".");
-            fflush(stdout);
-            if (gen % 100 == 0 && gen > 0) {
-                printf(" [gen %d]\n", gen);
-            }
-        }
+        gen++;
     }
 
-    printf("\n\n");
+    printf("\n[TIME LIMIT] Stopped after %.1f seconds (%d generations)\n\n", 
+           timer_seconds(&total_timer), gen);
 
     // -------------------------------------------------------------------------
     // STEP 7: FINAL RESULTS
@@ -298,9 +381,15 @@ int main(int argc, char** argv)
     printf("\n  Size:    %d nodes\n\n", best->ring_size);
 
     // -------------------------------------------------------------------------
+    // FINAL VISUALIZATION (at end of timer)
+    // -------------------------------------------------------------------------
+    printf("[FINAL VISUALIZATION] Generating final result image...\n");
+    Visualize_Ring(best, nodes, total_stations, final_best, alpha, gen);
+
+    // -------------------------------------------------------------------------
     // STEP 8: CLEANUP
     // -------------------------------------------------------------------------
-    printf("[STEP 8] Cleanup...\n");
+    printf("\n[STEP 8] Cleanup...\n");
 
     ThreadPool_Destroy();
     free(tasks);
@@ -315,7 +404,10 @@ int main(int argc, char** argv)
     // SUMMARY
     // -------------------------------------------------------------------------
     printf("============================================\n");
-    printf("  TOTAL TIME: %.1f seconds\n", timer_ms(&total_timer) / 1000.0);
+    printf("  DATASET: %d stations (alpha=%d)\n", total_stations, alpha);
+    printf("  GENERATIONS: %d\n", gen);
+    printf("  BEST COST: %.2f\n", final_best);
+    printf("  TOTAL TIME: %.1f seconds\n", timer_seconds(&total_timer));
     printf("============================================\n");
 
     return 0;

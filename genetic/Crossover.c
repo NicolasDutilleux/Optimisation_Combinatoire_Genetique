@@ -1,4 +1,7 @@
 // genetic/Crossover.c - Optimized with stack allocation
+//
+// IMPORTANT: Le nœud 1 (dépôt) doit TOUJOURS être présent dans l'enfant !
+//
 #include "Crossover.h"
 #include "utils\Random.h"
 #include <stdlib.h>
@@ -59,6 +62,16 @@ int* Slice_Crossover(const int* parentA, int sizeA,
             child[child_idx++] = parentB[i];
             used[parentB[i]] = 1;
         }
+    }
+    
+    // SÉCURITÉ : S'assurer que le dépôt (nœud 1) est dans l'enfant
+    if (!used[1] && child_idx < max_capacity) {
+        // Insérer le dépôt au début
+        for (int i = child_idx; i > 0; i--) {
+            child[i] = child[i - 1];
+        }
+        child[0] = 1;
+        child_idx++;
     }
     
     *child_size = child_idx;

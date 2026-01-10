@@ -48,6 +48,7 @@
     <ClInclude Include="utils\main_helpers.h" />
     <ClInclude Include="utils\Random.h" />
     <ClInclude Include="utils\ThreadPool.h" />
+    <ClInclude Include="utils\Visualize.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="core\Individual.c" />
@@ -65,6 +66,7 @@
     <ClCompile Include="utils\main_helpers.c" />
     <ClCompile Include="utils\Random.c" />
     <ClCompile Include="utils\ThreadPool.c" />
+    <ClCompile Include="utils\Visualize.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cost\Cost_explanation.md" />

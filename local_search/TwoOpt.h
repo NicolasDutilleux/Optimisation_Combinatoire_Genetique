@@ -11,5 +11,9 @@ void TwoOptImproveAlpha(
     const double** dist,
     const int** ranking);
 
+// 2-Opt EXHAUSTIF : continue jusqu'à convergence complète
+// Utilisé pour l'initialisation de la population (plus lent mais meilleure qualité)
+void TwoOptExhaustive(Individual* ind, int alpha, const double** dist, const int** ranking);
+
 #endif
 
