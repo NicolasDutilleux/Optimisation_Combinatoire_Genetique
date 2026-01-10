@@ -94,11 +94,11 @@ int main(int argc, char** argv)
     // DEFAULT PARAMETERS
     // -------------------------------------------------------------------------
     int max_generations = 1000000;  // Very high - will stop by time limit
-    int log_interval = 50;
+    int log_interval = 150;
     int verbose = 0;
     
     int num_species = 30;
-    int pop_size = 180;
+    int pop_size = 200;
     double mutation_rate = 0.30;
     
     // ÉLITISME : 5% des meilleurs survivent
@@ -245,6 +245,10 @@ int main(int argc, char** argv)
     int gen = 0;
     int visualization_done = 0;  // Flag pour ne visualiser qu'une seule fois
 
+    // Pour détecter les espèces avec le même score
+    double* species_best_costs = (double*)malloc(num_species * sizeof(double));
+    int* species_stagnation = (int*)calloc(num_species, sizeof(int));  // Compteur de stagnation par espèce
+
     // Evolution loop - stops when time limit is reached
     while (timer_seconds(&total_timer) < time_limit_seconds) {
         
@@ -282,6 +286,86 @@ int main(int argc, char** argv)
                     tk->inv_pct, tk->scr_pct, 0.5,
                     enable_logs, enable_timers
                 );
+            }
+        }
+
+        // =====================================================================
+        // DUPLICATE SPECIES DETECTION & RESET
+        // =====================================================================
+        // Toutes les 10 générations, vérifier si des espèces ont convergé vers
+        // le même coût et les réinitialiser pour maintenir la diversité
+        if (gen > 0 && gen % 10 == 0) {
+            // Calculer le meilleur coût de chaque espèce
+            for (int s = 0; s < num_species; s++) {
+                double* costs = Total_Cost_Specie(alpha, species[s], pop_size,
+                                                  total_stations,
+                                                  (const double**)dist,
+                                                  (const int**)ranking);
+                if (costs) {
+                    int idx = Select_Best(costs, pop_size);
+                    double new_best = costs[idx];
+                    
+                    // Vérifier si l'espèce stagne
+                    if (fabs(new_best - species_best_costs[s]) < 0.01) {
+                        species_stagnation[s]++;
+                    } else {
+                        species_stagnation[s] = 0;
+                    }
+                    species_best_costs[s] = new_best;
+                    free(costs);
+                }
+            }
+            
+            // Trouver les espèces avec des coûts EXACTEMENT ÉGAUX
+            for (int s1 = 0; s1 < num_species; s1++) {
+                for (int s2 = s1 + 1; s2 < num_species; s2++) {
+                    double diff = fabs(species_best_costs[s1] - species_best_costs[s2]);
+                    
+                    // Coûts ÉGAUX (tolérance pour erreurs floating point: < 0.01)
+                    // ET les deux espèces stagnent depuis > 5 vérifications
+                    if (diff < 0.01 && 
+                        species_stagnation[s1] > 5 && species_stagnation[s2] > 5) {
+                        
+                        // Réinitialiser s2 (garder s1)
+                        int to_reset = s2;
+                        
+                        printf("[DIVERSITY] Species %d and %d have EQUAL cost (%.2f) - resetting species %d\n",
+                               s1, s2, species_best_costs[s1], to_reset);
+                        
+                        // Réinitialiser tous les individus de cette espèce
+                        for (int i = 0; i < pop_size; i++) {
+                            Individual_Free(&species[to_reset][i]);
+                            Individual_Init(&species[to_reset][i], total_stations);
+                            
+                            // Créer un nouveau ring aléatoire
+                            int ring_size = RandInt(2, total_stations);
+                            int* all_ids = (int*)malloc(total_stations * sizeof(int));
+                            for (int j = 0; j < total_stations; j++) all_ids[j] = j + 1;
+                            for (int j = total_stations - 1; j > 0; j--) {
+                                int k = RandInt(0, j);
+                                int tmp = all_ids[j]; all_ids[j] = all_ids[k]; all_ids[k] = tmp;
+                            }
+                            
+                            species[to_reset][i].active_ring[0] = 1;  // Dépôt
+                            species[to_reset][i].ring_size = 1;
+                            int added = 0;
+                            for (int k = 0; k < total_stations && added < ring_size - 1; k++) {
+                                if (all_ids[k] != 1) {
+                                    species[to_reset][i].active_ring[species[to_reset][i].ring_size++] = all_ids[k];
+                                    added++;
+                                }
+                            }
+                            free(all_ids);
+                            species[to_reset][i].cached_cost = 1e18;
+                        }
+                        
+                        species_stagnation[to_reset] = 0;
+                        species_best_costs[to_reset] = 1e18;
+                        
+                        // Ne réinitialiser qu'une espèce par vérification
+                        break;
+                    }
+                }
             }
         }
 
@@ -337,6 +421,10 @@ int main(int argc, char** argv)
 
         gen++;
     }
+
+    // Libérer les tableaux de suivi
+    free(species_best_costs);
+    free(species_stagnation);
 
     printf("\n[TIME LIMIT] Stopped after %.1f seconds (%d generations)\n\n", 
            timer_seconds(&total_timer), gen);

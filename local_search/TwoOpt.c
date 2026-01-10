@@ -1,19 +1,23 @@
 // local_search/TwoOpt.c - 2-opt local search implementation
 //
 // DEUX MODES DE 2-OPT :
-// 1. EXHAUSTIF (pour initialisation) : Continue jusqu'à convergence complète
-// 2. ADAPTATIF (pour évolution) : Nombre d'itérations proportionnel à ring_size
+// 1. EXHAUSTIF (pour initialisation) : Parcourt tout, jusqu'à convergence
+// 2. ADAPTATIF (pour évolution) : Fenêtre aléatoire, nombre limité d'améliorations
 //
 #include "TwoOpt.h"
+#include "utils\Random.h"
 #include <stdio.h>
 
 // =============================================================================
 // 2-OPT ADAPTATIF (utilisé pendant l'évolution)
 // =============================================================================
-// Nombre d'itérations = ring_size / divisor (minimum 5, maximum 50)
-// Cela permet :
-//   - Petits rings (20 nœuds) : ~10 itérations (rapide)
-//   - Grands rings (100 nœuds) : ~50 itérations (plus d'exploration)
+// Au lieu de parcourir TOUT le ring (O(n²)), on:
+// 1. Choisit un point de départ aléatoire
+// 2. Parcourt une fenêtre de taille proportionnelle au ring
+// 3. S'arrête après un nombre limité d'améliorations
+//
+// IMPORTANT: On travaille sur des indices LINÉAIRES dans [start, end]
+// pour éviter les bugs de wrap-around lors du reverse.
 //
 void TwoOptImproveAlpha(Individual* ind, int alpha, const double** dist, const int** ranking)
 {
@@ -26,44 +30,55 @@ void TwoOptImproveAlpha(Individual* ind, int alpha, const double** dist, const i
         if (ind->active_ring[i] <= 0) return;
     }
 
-    // Nombre d'itérations adaptatif : proportionnel à la taille du ring
-    // ring_size / 2, avec min=5 et max=50
-    int max_iterations = m / 2;
-    if (max_iterations < 5) max_iterations = 5;
-    if (max_iterations > 50) max_iterations = 50;
+    // Paramètres adaptatifs
+    int max_improvements = m / 4;
+    if (max_improvements < 3) max_improvements = 3;
+    if (max_improvements > 20) max_improvements = 20;
     
-    int improved = 1;
-    int iterations = 0;
+    // Taille de la fenêtre (portion du ring à explorer)
+    int window_size = m / 2;
+    if (window_size < 5) window_size = 5;
+    if (window_size > m - 2) window_size = m - 2;
+    
+    // Point de départ aléatoire, s'assurer qu'on ne dépasse pas
+    int max_start = m - window_size - 1;
+    if (max_start < 0) max_start = 0;
+    
+    int start = (max_start > 0) ? RandInt(0, max_start) : 0;
+    int end = start + window_size;
+    if (end >= m) end = m - 1;
+    
+    int improvements = 0;
+    
+    // Parcourir la fenêtre [start, end] avec indices linéaires (pas de wrap)
+    for (int i = start; i < end - 1 && improvements < max_improvements; ++i) {
+        for (int j = i + 2; j <= end && improvements < max_improvements; ++j) {
+            
+            // Tous les accès sont dans [0, m-1] car i < end <= m-1 et j <= end
+            int id_a = ind->active_ring[i];
+            int id_b = ind->active_ring[i + 1];  // Safe: i < end-1, donc i+1 < end <= m-1
+            int id_c = ind->active_ring[j];
+            
+            // Pour id_d, on utilise modulo car j+1 peut être = m
+            int id_d = ind->active_ring[(j + 1) % m];
 
-    while (improved && iterations < max_iterations) {
-        improved = 0;
-        
-        for (int i = 0; i < m - 1; ++i) {
-            for (int j = i + 1; j < m; ++j) {
-                int id_a = ind->active_ring[i];
-                int id_b = ind->active_ring[(i + 1) % m];
-                int id_c = ind->active_ring[j];
-                int id_d = ind->active_ring[(j + 1) % m];
-
-                double d0 = dist[id_a - 1][id_b - 1] + dist[id_c - 1][id_d - 1];
-                double d1 = dist[id_a - 1][id_c - 1] + dist[id_b - 1][id_d - 1];
-                
-                if (d1 < d0) {
-                    // Reverse segment from i+1 to j
-                    int a = i + 1;
-                    int b = j;
-                    while (a < b) {
-                        int tmp = ind->active_ring[a];
-                        ind->active_ring[a] = ind->active_ring[b];
-                        ind->active_ring[b] = tmp;
-                        a++;
-                        b--;
-                    }
-                    improved = 1;
+            double d0 = dist[id_a - 1][id_b - 1] + dist[id_c - 1][id_d - 1];
+            double d1 = dist[id_a - 1][id_c - 1] + dist[id_b - 1][id_d - 1];
+            
+            if (d1 < d0) {
+                // Reverse segment [i+1, j] - tous les indices sont dans [start, end]
+                int a = i + 1;
+                int b = j;
+                while (a < b) {
+                    int tmp = ind->active_ring[a];
+                    ind->active_ring[a] = ind->active_ring[b];
+                    ind->active_ring[b] = tmp;
+                    a++;
+                    b--;
                 }
+                improvements++;
             }
         }
-        iterations++;
     }
 }
 
@@ -89,18 +104,20 @@ void TwoOptExhaustive(Individual* ind, int alpha, const double** dist, const int
     while (improved) {
         improved = 0;
         
+        // i va de 0 à m-2 (pour que i+1 soit valide)
         for (int i = 0; i < m - 1; ++i) {
-            for (int j = i + 1; j < m; ++j) {
+            // j va de i+2 à m-1
+            for (int j = i + 2; j < m; ++j) {
                 int id_a = ind->active_ring[i];
-                int id_b = ind->active_ring[(i + 1) % m];
+                int id_b = ind->active_ring[i + 1];  // Safe: i < m-1
                 int id_c = ind->active_ring[j];
-                int id_d = ind->active_ring[(j + 1) % m];
+                int id_d = ind->active_ring[(j + 1) % m];  // Modulo pour le wrap
 
                 double d0 = dist[id_a - 1][id_b - 1] + dist[id_c - 1][id_d - 1];
                 double d1 = dist[id_a - 1][id_c - 1] + dist[id_b - 1][id_d - 1];
                 
                 if (d1 < d0) {
-                    // Reverse segment from i+1 to j
+                    // Reverse segment [i+1, j]
                     int a = i + 1;
                     int b = j;
                     while (a < b) {
