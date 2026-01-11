@@ -70,6 +70,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="cost\Cost_explanation.md" />
+    <None Include="LICENSE" />
     <None Include="README.md" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

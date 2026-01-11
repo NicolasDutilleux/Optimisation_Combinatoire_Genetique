@@ -28,8 +28,6 @@
     <Text Include="data\127\127_sol.txt" />
     <Text Include="data\225\225_data.txt" />
     <Text Include="data\225\225_sol.txt" />
-    <Text Include="FINAL_SUMMARY.txt" />
-    <Text Include="README_FINAL.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="core\Individual.h">
@@ -77,6 +75,12 @@
     <ClInclude Include="utils\main_helpers.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
+    <ClInclude Include="utils\ThreadPool.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\Visualize.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="core\Individual.c">
@@ -121,8 +125,16 @@
     <ClCompile Include="utils\main_helpers.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="utils\ThreadPool.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\Visualize.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />
+    <None Include="cost\Cost_explanation.md" />
+    <None Include="LICENSE" />
   </ItemGroup>
 </Project>
