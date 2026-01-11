@@ -285,4 +285,4 @@ Generated HTML files show:
 
 ## License
 
-MIT License
+[MIT License](LICENSE)
