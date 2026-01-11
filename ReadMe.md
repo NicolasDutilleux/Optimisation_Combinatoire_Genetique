@@ -1,287 +1,279 @@
-﻿# Ring-Station Genetic Algorithm Optimizer
+﻿# 🧬 Ring-Station Genetic Algorithm Optimizer
 
-A high-performance, multi-threaded genetic algorithm implementation in C for solving the Ring Scheduling Problem (RSP). This project demonstrates practical optimization techniques including parallel processing, memory-efficient data structures, and local search improvements.
+A high-performance, multi-threaded **genetic algorithm** in pure C for solving the **Ring Star Problem (RSP)**. Features parallel evolution, adaptive mutation, 2-opt local search, and real-time HTML visualization.
 
-## Problem Description
+## 📋 Problem Description
 
-Given a set of stations (nodes with coordinates), find an optimal subset forming an "**active ring**" (a closed tour). Every station not in the ring is assigned to its nearest ring station. The objective is to minimize a weighted combination of:
-- **Ring cost**: Total distance traveled around the ring
-- **Assignment cost**: Total distance from non-ring stations to their assigned ring stations
+Given a set of **N stations** with coordinates, find an optimal subset forming an **active ring** (closed tour). Stations not in the ring are assigned to their nearest ring station.
 
-## Algorithm Overview
+**Objective**: Minimize total cost = Ring Distance + α × Assignment Cost
+
+Where **α** (alpha) controls the trade-off between ring compactness and assignment distances.
+
+```
+        ○ Station 43 (assigned to ring)
+         \
+          \  (assignment cost)
+           \
+    ●───────●───────●
+   /         Ring    \
+  ●                   ●
+   \                 /
+    ●───────●───────●
+             \
+              \  (assignment cost)
+               \
+                ○ Station 17 (assigned to ring)
+
+● = Ring node
+○ = Non-ring node (assigned to nearest ring node)
+```
+
+## 🚀 Quick Start
+
+```bash
+# Run the optimizer
+./Optimisation_Combinatoire_Genetique.exe
+
+# Interactive prompts:
+# Time limit in seconds (e.g., 58): 58
+# Available datasets: 51, 100, 127, 225
+# Dataset number: 127
+# Alpha (3, 5, 7, 9): 5
+```
+
+## 📊 Algorithm Overview
 
 ```mermaid
 flowchart TD
-    subgraph INIT["🚀 Initialization"]
-        A[Load Dataset] --> B[Compute Distance Matrix]
-        B --> C[Compute Distance Rankings]
-        C --> D[Generate Random Population]
-        D --> E[Create Thread Pool]
+    subgraph INPUT["📥 User Input"]
+        A1[Time Limit] --> A
+        A2[Dataset] --> A
+        A3[Alpha] --> A
+        A[Start Timer]
+    end
+
+    subgraph INIT["🔧 Initialization"]
+        A --> B[Load Dataset]
+        B --> C[Compute Distance Matrix O(n²)]
+        C --> D[Compute Distance Rankings]
+        D --> E[Generate Random Population]
+        E --> F[Apply 2-Opt to 20% of Species]
+        F --> G[Create Thread Pool]
     end
     
-    subgraph EVOLUTION["🔄 Evolution Loop (Parallel)"]
-        F[Build Task List] --> G{Thread Pool}
-        G --> H1[Worker 1: Evolve Species 1-25]
-        G --> H2[Worker 2: Evolve Species 26-50]
-        G --> H3[Worker 3: Evolve Species 51-75]
-        G --> H4[Worker N: Evolve Species ...]
-        H1 & H2 & H3 & H4 --> I[Synchronize]
+    subgraph EVOLUTION["🔄 Parallel Evolution Loop"]
+        G --> H[Build Task List]
+        H --> I{Thread Pool}
+        I --> J1[Worker 1]
+        I --> J2[Worker 2]
+        I --> J3[Worker N]
+        J1 & J2 & J3 --> K[Synchronize]
+        K --> L{Duplicate Species?}
+        L -->|Yes| M[Reset Species]
+        L -->|No| N[Progress Report]
+        M --> N
+        N --> O{Time Limit?}
+        O -->|No| H
     end
     
-    subgraph EVOLVE["🧬 EvolveSpecie (per species)"]
-        J[Evaluate Fitness] --> K[Sort by Cost]
-        K --> L[Copy Elites]
-        L --> M[Crossover]
-        M --> N[Mutation]
-        N --> O[2-Opt Local Search]
-        O --> P[Replace Population]
+    subgraph SPECIES["🧬 EvolveSpecie (per worker)"]
+        direction TB
+        S1[Evaluate Fitness] --> S2[Sort by Cost]
+        S2 --> S3[Copy Elites 5%]
+        S3 --> S4[Mating Pool Selection]
+        S4 --> S5[Crossover]
+        S5 --> S6[Mutation]
+        S6 --> S7[2-Opt Local Search]
+        S7 --> S8[Replace Population]
     end
     
-    subgraph REPORT["📊 Progress & Termination"]
-        Q{Log Interval?}
-        Q -->|Yes| R[Evaluate & Report Top 5]
-        Q -->|No| S[Continue]
-        R --> T{Stagnation?}
-        T -->|Yes| U[Early Stop]
-        T -->|No| S
-        S --> F
+    subgraph ADAPT["📈 Adaptive Mechanisms"]
+        N --> AD1{Stagnation?}
+        AD1 -->|Yes| AD2[Increase Mutation Rate]
+        AD2 --> AD3{Stagnation ≥ 50?}
+        AD3 -->|Yes, First Time| AD4[Generate Visualization]
+        AD1 -->|No| AD5[Reset Mutation Rate]
     end
-    
-    INIT --> F
-    I --> Q
-    U --> V[Final Results & Cleanup]
-    
-    style EVOLUTION fill:#e1f5fe
-    style EVOLVE fill:#fff3e0
+
+    subgraph OUTPUT["📤 Output"]
+        O -->|Yes| P[Final Evaluation]
+        P --> Q[Generate Final Visualization]
+        Q --> R[Display Results]
+    end
+
+    style INPUT fill:#e3f2fd
     style INIT fill:#e8f5e9
-    style REPORT fill:#fce4ec
+    style EVOLUTION fill:#fff3e0
+    style SPECIES fill:#fce4ec
+    style ADAPT fill:#f3e5f5
+    style OUTPUT fill:#e0f2f1
 ```
 
-## Performance Optimizations
+## ⚡ Key Features
 
-### 1. Multi-Threading with Thread Pool
+### Multi-Species Parallel Evolution
+- **30 independent species** evolving in parallel
+- **Thread pool** with atomic task distribution
+- No thread creation overhead per generation
 
-**Problem**: Creating threads is expensive (~0.5-1ms per thread on Windows). With 100 species × 1000 generations, naive threading would waste 50-100 seconds just on thread creation.
+### Adaptive Mutation Rate
+| Stagnation | Mutation Rate | Strategy |
+|------------|---------------|----------|
+| 0-19 | 30% → 50% | Exploitation |
+| 20-49 | 50% → 70% | Exploration |
+| 50+ | 70% → 90% | Escape local optima |
+| Improvement | → 30% | Reset |
 
-**Solution**: Producer-consumer thread pool pattern:
-- Workers are created **once** at startup
-- Each generation, workers are **woken up** via semaphore
-- Workers grab tasks **atomically** using `InterlockedIncrement`
-- Workers **sleep** when done (not destroyed)
+### Diversity Maintenance
+- **Duplicate detection**: Species with identical costs are reset
+- **Random reinitialization**: Full random restart (no 2-opt) for diversity
 
-```
-Main Thread                      Worker Threads
-     │                                │
-     │  ThreadPool_Init()             │
-     │  Create N workers ──────────►  │ (workers wait on semaphore)
-     │                                │
-     │  ThreadPool_Run(tasks)         │
-     │  ReleaseSemaphore(N) ───────►  │ Workers wake up!
-     │  WaitForSingleObject() ◄────┐  │ 
-     │  (blocks)                   │  │ Workers execute tasks
-     │                             │  │ Last one: SetEvent() ──┘
-     │  Returns                       │
-     │                                │ Workers go back to sleep
-```
+### 2-Opt Local Search
+- **Exhaustive** mode for initialization (20% of species)
+- **Adaptive** mode during evolution (random window, limited improvements)
 
-**See**: `utils/ThreadPool.c` for detailed implementation with extensive comments.
+### Real-Time Visualization
+HTML/SVG visualization generated:
+1. When stagnation reaches 50 (first time)
+2. At the end of the time limit
 
-### 2. Stack Allocation for Small Arrays
-
-**Problem**: `malloc`/`free` are relatively slow and cause heap fragmentation in hot loops.
-
-**Solution**: Use stack-allocated buffers for small arrays:
-
-```c
-#define MAX_STACK_SIZE 256
-int stack_buffer[MAX_STACK_SIZE];
-int* array;
-
-if (size <= MAX_STACK_SIZE) {
-    array = stack_buffer;  // Fast: no malloc
-} else {
-    array = malloc(size * sizeof(int));  // Fallback for large arrays
-}
-```
-
-**Used in**: `Cost.c`, `Crossover.c`, `Mutation.c`
-
-### 3. Precomputed Distance Matrix & Rankings
-
-**Problem**: Computing distances repeatedly is O(1) per lookup but the Euclidean distance formula is expensive.
-
-**Solution**: Precompute everything once:
-- **Distance Matrix** (`double**`): O(n²) space, O(1) lookup
-- **Distance Rankings** (`int**`): For each station, neighbors sorted by distance
-
-```c
-// Instead of: sqrt((x1-x2)² + (y1-y2)²) every time
-// Just do: dist[station_a][station_b]
-```
-
-### 4. Cost Caching
-
-**Problem**: Cost computation (ring cost + assignment cost) is expensive and often redundant.
-
-**Solution**: Cache cost in each Individual:
-
-```c
-typedef struct {
-    int* active_ring;
-    int ring_size;
-    double cached_cost;  // Set to 1e18 when invalid
-} Individual;
-
-// In evaluation:
-if (ind->cached_cost < 1e17) {
-    return ind->cached_cost;  // Cache hit!
-} else {
-    double cost = compute_cost(ind);
-    ind->cached_cost = cost;  // Cache for next time
-    return cost;
-}
-```
-
-### 5. 2-Opt Local Search
-
-Each offspring is improved using 2-opt: iteratively reverse ring segments that reduce total distance.
+## 📁 Project Structure
 
 ```
-Before:  A ─── B       C ─── D
-              ╲       ╱
-               ╲     ╱
-                ╳   (crossing = bad)
-               ╱     ╲
-              ╱       ╲
-         
-After:   A ─── C       B ─── D  (uncrossed = shorter)
-```
-
-### 6. Atomic Task Distribution
-
-Workers grab tasks using lock-free atomic operations:
-
-```c
-// No locks needed! InterlockedIncrement is atomic.
-LONG task_idx = InterlockedIncrement(&g_next_task) - 1;
-if (task_idx < g_task_count) {
-    execute(tasks[task_idx]);
-}
-```
-
-## File Structure
-
-```
-├── main.c                      # Entry point, orchestration (clean & minimal)
+├── main.c                          # Entry point, user input, main loop
 ├── core/
-│   ├── Individual.h/c          # Individual representation with cost caching
-│   └── Node.h/c                # Station/node data structure
+│   ├── Individual.h/c              # Individual with cost caching
+│   └── Node.h/c                    # Station data structure
 ├── evolution/
-│   └── EvolveSpecie.h/c        # One generation of evolution (with timers)
+│   └── EvolveSpecie.h/c            # Single generation evolution
 ├── genetic/
-│   ├── Crossover.h/c           # Slice crossover operator
-│   ├── Mutation.h/c            # Add, remove, swap, inversion, scramble
-│   └── Selection.h/c           # Tournament selection, best selection
+│   ├── Crossover.h/c               # Slice crossover (depot-safe)
+│   ├── Mutation.h/c                # 5 mutation types (depot-safe)
+│   └── Selection.h/c               # Mating pool selection
 ├── local_search/
-│   └── TwoOpt.h/c              # 2-opt local search improvement
+│   └── TwoOpt.h/c                  # Adaptive & exhaustive 2-opt
 ├── cost/
-│   └── Cost.h/c                # Ring cost + assignment cost calculation
+│   └── Cost.h/c                    # Ring + assignment cost
 ├── generation/
-│   └── PopulationInit.h/c      # Random population generation
+│   └── PopulationInit.h/c          # Random population generation
 ├── utils/
-│   ├── ThreadPool.h/c          # Thread pool (extensively commented!)
-│   ├── Distance.h/c            # Distance matrix & ranking computation
-│   ├── Random.h/c              # Random number generation
-│   ├── FileIO.h/c              # Dataset loading
-│   ├── main_helpers.h/c        # CLI parsing, reporting
-│   └── hierarchy_and_print_utils.h/c  # SVG visualization
-└── data/
-    ├── 51/51_data.txt          # 51-station dataset
-    ├── 100/100_data.txt        # 100-station dataset
-    └── 127/127_data.txt        # 127-station dataset
+│   ├── ThreadPool.h/c              # Windows thread pool
+│   ├── Distance.h/c                # Distance matrix & ranking
+│   ├── Visualize.h/c               # HTML/SVG generation
+│   ├── Random.h/c                  # RNG utilities
+│   ├── FileIO.h/c                  # Dataset loading
+│   └── main_helpers.h/c            # CLI, reporting, mutation adaptation
+├── data/
+│   ├── 51/51_data.txt              # 51 stations
+│   ├── 100/100_data.txt            # 100 stations
+│   ├── 127/127_data.txt            # 127 stations
+│   └── 225/225_data.txt            # 225 stations
+└── images/                         # Generated visualizations (gitignored)
 ```
 
-## Build
+## 🎯 Benchmark Results
 
-### Windows / Visual Studio
+| Dataset | Alpha | Best Known | Our Result |
+|---------|-------|------------|------------|
+| 51 | 3 | 1,278 | - |
+| 51 | 5 | 1,995 | - |
+| 100 | 5 | 100,785 | - |
+| 127 | 5 | 539,955 | - |
+| 225 | 5 | - | - |
 
-1. Open `OptimisationCombinatoire.sln` in Visual Studio
-2. Build in `Release` configuration for best performance
+## 🔧 Build
+
+### Visual Studio
+1. Open `Optimisation_Combinatoire_Genetique.sln`
+2. Build in **Release** mode for best performance
 
 ### Command Line (MSVC)
-
 ```bash
-cl /O2 /MT main.c utils\*.c evolution\*.c genetic\*.c cost\*.c generation\*.c local_search\*.c core\*.c /Fe:rsp_optimizer.exe
+cl /O2 /MT main.c core\*.c evolution\*.c genetic\*.c cost\*.c generation\*.c local_search\*.c utils\*.c /Fe:optimizer.exe
 ```
 
-### Cross-Platform Note
+## ⚙️ Configuration
 
-This implementation uses Windows-specific threading APIs:
-- `_beginthreadex`, `WaitForSingleObject`, `CreateSemaphore`, etc.
+Default parameters in `main.c`:
+```c
+int num_species = 30;           // Number of parallel species
+int pop_size = 200;             // Individuals per species
+double mutation_rate = 0.30;    // Initial mutation rate
+int elitism = 5%;               // Top individuals preserved
+int log_interval = 150;         // Generations between reports
+```
 
-For POSIX systems, you would need to replace these with pthread equivalents:
-- `pthread_create` / `pthread_join`
-- `sem_wait` / `sem_post`
-- `pthread_cond_wait` / `pthread_cond_signal`
-
-## Usage
-
+Command line options:
 ```bash
-# Basic run (uses all CPU cores)
-rsp_optimizer.exe
-
-# Custom parameters
-rsp_optimizer.exe -g 2000 -s 50 -p 40 -t 4
-
-# With timing information
-rsp_optimizer.exe --timers
-
-# With detailed logs
-rsp_optimizer.exe --logs
+optimizer.exe -g 5000 -s 50 -p 100 -t 8 --logs --timers
 ```
 
-### Command Line Options
+| Option | Description |
+|--------|-------------|
+| `-g N` | Max generations |
+| `-s N` | Number of species |
+| `-p N` | Population size |
+| `-t N` | Thread count (0 = auto) |
+| `--logs` | Detailed evolution logs |
+| `--timers` | Performance timing |
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-g N` | Maximum generations | 10000 |
-| `-s N` | Number of species | 100 |
-| `-p N` | Population size per species | 50 |
-| `-t N` | Number of worker threads (0 = auto) | auto |
-| `-l N` | Log/report interval | 50 |
-| `-v` | Verbose mode | off |
-| `--logs` | Enable detailed evolution logs | off |
-| `--timers` | Enable performance timers | off |
-
-## Timer Output Example
-
-With `--timers` enabled, you'll see detailed timing for each evolution step:
+## 📈 Output Example
 
 ```
-[EVOLVE TIMERS]
-  Evaluation:    0.45 ms
-  Sorting:       0.02 ms
-  Crossover:     0.31 ms (total for 50 offspring)
-  Mutation:      0.18 ms
-  2-Opt:         1.23 ms
-  Replace:       0.05 ms
-  TOTAL:         2.24 ms
+============================================
+  GENETIC ALGORITHM - RING OPTIMIZATION
+============================================
+
+Time limit in seconds (e.g., 58): 58
+Dataset number: 127
+Alpha (3, 5, 7, 9): 5
+
+[CONFIG]
+  Time limit:  58.0 seconds
+  Dataset:     data\127\127_data.txt
+  Alpha:       5
+  Species:     30
+  Population:  200 per species
+
+[STEP 4] Initializing population...
+         30 species x 200 individuals (45.2 ms)
+         Applying 2-Opt (exhaustive) to 20% of species...
+
+[GENERATION 150]
+  Top 5 species:
+    1. Species  12: cost = 542156.32
+    2. Species   5: cost = 543892.11
+    ...
+  Best: cost=542156.32 (species 12, individual 45)
+  No improvement (stagnation: 15)
+  Mutation rate increased to 0.375
+
+[TIME LIMIT] Stopped after 58.0 seconds (2847 generations)
+
+============================================
+  DATASET: 127 stations (alpha=5)
+  GENERATIONS: 2847
+  BEST COST: 541234.56
+  TOTAL TIME: 58.0 seconds
+============================================
 ```
 
-This helps identify bottlenecks. In this example, 2-Opt dominates - you might want to reduce iterations or apply it less frequently.
+## 🖼️ Visualization
 
-## Performance Tips
+Generated HTML files show:
+- Ring nodes (blue) with connections
+- Non-ring nodes (gray) with assignment lines
+- Depot node (green)
+- Complete ring path
+- All assignments (Station X → Ring Node Y)
 
-1. **Use Release build**: Debug builds are 10-50x slower
-2. **Match threads to cores**: More threads than cores adds overhead
-3. **Adjust species/population**: More species = more parallelism, but diminishing returns
-4. **Watch for stagnation**: Algorithm auto-stops after 50 generations without improvement
-5. **Use `--timers`**: Identify which phase is the bottleneck
+## 📝 Notes
 
-## License
+- **Windows-only**: Uses Windows threading APIs (`_beginthreadex`, `WaitForSingleObject`, etc.)
+- **Depot constraint**: Node 1 is always in the ring (enforced in crossover and mutation)
+- **Memory efficient**: Stack allocation for small arrays, cost caching
 
-See repository metadata.
+## 📄 License
 
----
-
-*This README reflects the optimized, multi-threaded implementation with detailed comments explaining Windows threading primitives and their C++ equivalents.*
+MIT License - See repository for details.
