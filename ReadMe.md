@@ -1,35 +1,35 @@
-﻿# 🧬 Ring-Station Genetic Algorithm Optimizer
+﻿# Ring-Station Genetic Algorithm Optimizer
 
 A high-performance, multi-threaded **genetic algorithm** in pure C for solving the **Ring Star Problem (RSP)**. Features parallel evolution, adaptive mutation, 2-opt local search, and real-time HTML visualization.
 
-## 📋 Problem Description
+## Problem Description
 
 Given a set of **N stations** with coordinates, find an optimal subset forming an **active ring** (closed tour). Stations not in the ring are assigned to their nearest ring station.
 
-**Objective**: Minimize total cost = Ring Distance + α × Assignment Cost
+**Objective**: Minimize total cost = Ring Distance + alpha x Assignment Cost
 
-Where **α** (alpha) controls the trade-off between ring compactness and assignment distances.
+Where **alpha** controls the trade-off between ring compactness and assignment distances.
 
 ```
-        ○ Station 43 (assigned to ring)
+        o Station 43 (assigned to ring)
          \
           \  (assignment cost)
            \
-    ●───────●───────●
+    *-------*-------*
    /         Ring    \
-  ●                   ●
+  *                   *
    \                 /
-    ●───────●───────●
+    *-------*-------*
              \
               \  (assignment cost)
                \
-                ○ Station 17 (assigned to ring)
+                o Station 17 (assigned to ring)
 
-● = Ring node
-○ = Non-ring node (assigned to nearest ring node)
+* = Ring node
+o = Non-ring node (assigned to nearest ring node)
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Run the optimizer
@@ -42,27 +42,27 @@ Where **α** (alpha) controls the trade-off between ring compactness and assignm
 # Alpha (3, 5, 7, 9): 5
 ```
 
-## 📊 Algorithm Overview
+## Algorithm Overview
 
 ```mermaid
 flowchart TD
-    subgraph INPUT["📥 User Input"]
+    subgraph INPUT[User Input]
         A1[Time Limit] --> A
         A2[Dataset] --> A
         A3[Alpha] --> A
         A[Start Timer]
     end
 
-    subgraph INIT["🔧 Initialization"]
+    subgraph INIT[Initialization]
         A --> B[Load Dataset]
-        B --> C[Compute Distance Matrix O(n²)]
+        B --> C[Compute Distance Matrix]
         C --> D[Compute Distance Rankings]
         D --> E[Generate Random Population]
-        E --> F[Apply 2-Opt to 20% of Species]
+        E --> F[Apply 2-Opt to 20 percent of Species]
         F --> G[Create Thread Pool]
     end
     
-    subgraph EVOLUTION["🔄 Parallel Evolution Loop"]
+    subgraph EVOLUTION[Parallel Evolution Loop]
         G --> H[Build Task List]
         H --> I{Thread Pool}
         I --> J1[Worker 1]
@@ -73,14 +73,13 @@ flowchart TD
         L -->|Yes| M[Reset Species]
         L -->|No| N[Progress Report]
         M --> N
-        N --> O{Time Limit?}
+        N --> O{Time Limit Reached?}
         O -->|No| H
     end
     
-    subgraph SPECIES["🧬 EvolveSpecie (per worker)"]
-        direction TB
+    subgraph SPECIES[EvolveSpecie - per worker]
         S1[Evaluate Fitness] --> S2[Sort by Cost]
-        S2 --> S3[Copy Elites 5%]
+        S2 --> S3[Copy Elites 5 percent]
         S3 --> S4[Mating Pool Selection]
         S4 --> S5[Crossover]
         S5 --> S6[Mutation]
@@ -88,15 +87,15 @@ flowchart TD
         S7 --> S8[Replace Population]
     end
     
-    subgraph ADAPT["📈 Adaptive Mechanisms"]
+    subgraph ADAPT[Adaptive Mechanisms]
         N --> AD1{Stagnation?}
         AD1 -->|Yes| AD2[Increase Mutation Rate]
-        AD2 --> AD3{Stagnation ≥ 50?}
-        AD3 -->|Yes, First Time| AD4[Generate Visualization]
+        AD2 --> AD3{Stagnation >= 50?}
+        AD3 -->|First Time| AD4[Generate Visualization]
         AD1 -->|No| AD5[Reset Mutation Rate]
     end
 
-    subgraph OUTPUT["📤 Output"]
+    subgraph OUTPUT[Output]
         O -->|Yes| P[Final Evaluation]
         P --> Q[Generate Final Visualization]
         Q --> R[Display Results]
@@ -110,7 +109,7 @@ flowchart TD
     style OUTPUT fill:#e0f2f1
 ```
 
-## ⚡ Key Features
+## Key Features
 
 ### Multi-Species Parallel Evolution
 - **30 independent species** evolving in parallel
@@ -118,12 +117,13 @@ flowchart TD
 - No thread creation overhead per generation
 
 ### Adaptive Mutation Rate
+
 | Stagnation | Mutation Rate | Strategy |
 |------------|---------------|----------|
-| 0-19 | 30% → 50% | Exploitation |
-| 20-49 | 50% → 70% | Exploration |
-| 50+ | 70% → 90% | Escape local optima |
-| Improvement | → 30% | Reset |
+| 0-19 | 30% to 50% | Exploitation |
+| 20-49 | 50% to 70% | Exploration |
+| 50+ | 70% to 90% | Escape local optima |
+| Improvement | Reset to 30% | Exploit new area |
 
 ### Diversity Maintenance
 - **Duplicate detection**: Species with identical costs are reset
@@ -138,7 +138,7 @@ HTML/SVG visualization generated:
 1. When stagnation reaches 50 (first time)
 2. At the end of the time limit
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ├── main.c                          # Entry point, user input, main loop
@@ -152,14 +152,14 @@ HTML/SVG visualization generated:
 │   ├── Mutation.h/c                # 5 mutation types (depot-safe)
 │   └── Selection.h/c               # Mating pool selection
 ├── local_search/
-│   └── TwoOpt.h/c                  # Adaptive & exhaustive 2-opt
+│   └── TwoOpt.h/c                  # Adaptive and exhaustive 2-opt
 ├── cost/
 │   └── Cost.h/c                    # Ring + assignment cost
 ├── generation/
 │   └── PopulationInit.h/c          # Random population generation
 ├── utils/
 │   ├── ThreadPool.h/c              # Windows thread pool
-│   ├── Distance.h/c                # Distance matrix & ranking
+│   ├── Distance.h/c                # Distance matrix and ranking
 │   ├── Visualize.h/c               # HTML/SVG generation
 │   ├── Random.h/c                  # RNG utilities
 │   ├── FileIO.h/c                  # Dataset loading
@@ -172,17 +172,24 @@ HTML/SVG visualization generated:
 └── images/                         # Generated visualizations (gitignored)
 ```
 
-## 🎯 Benchmark Results
+## Benchmark Results
 
-| Dataset | Alpha | Best Known | Our Result |
-|---------|-------|------------|------------|
-| 51 | 3 | 1,278 | - |
-| 51 | 5 | 1,995 | - |
-| 100 | 5 | 100,785 | - |
-| 127 | 5 | 539,955 | - |
-| 225 | 5 | - | - |
+| Dataset | Alpha | Best Known |
+|---------|-------|------------|
+| 51 | 3 | 1,278 |
+| 51 | 5 | 1,995 |
+| 51 | 7 | 2,113 |
+| 51 | 9 | 1,244 |
+| 100 | 3 | 63,846 |
+| 100 | 5 | 100,785 |
+| 100 | 7 | 115,388 |
+| 100 | 9 | 94,265 |
+| 127 | 3 | 354,846 |
+| 127 | 5 | 539,955 |
+| 127 | 7 | 567,110 |
+| 127 | 9 | 347,845 |
 
-## 🔧 Build
+## Build
 
 ### Visual Studio
 1. Open `Optimisation_Combinatoire_Genetique.sln`
@@ -193,9 +200,10 @@ HTML/SVG visualization generated:
 cl /O2 /MT main.c core\*.c evolution\*.c genetic\*.c cost\*.c generation\*.c local_search\*.c utils\*.c /Fe:optimizer.exe
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 Default parameters in `main.c`:
+
 ```c
 int num_species = 30;           // Number of parallel species
 int pop_size = 200;             // Individuals per species
@@ -205,6 +213,7 @@ int log_interval = 150;         // Generations between reports
 ```
 
 Command line options:
+
 ```bash
 optimizer.exe -g 5000 -s 50 -p 100 -t 8 --logs --timers
 ```
@@ -218,7 +227,7 @@ optimizer.exe -g 5000 -s 50 -p 100 -t 8 --logs --timers
 | `--logs` | Detailed evolution logs |
 | `--timers` | Performance timing |
 
-## 📈 Output Example
+## Output Example
 
 ```
 ============================================
@@ -259,21 +268,21 @@ Alpha (3, 5, 7, 9): 5
 ============================================
 ```
 
-## 🖼️ Visualization
+## Visualization
 
 Generated HTML files show:
 - Ring nodes (blue) with connections
 - Non-ring nodes (gray) with assignment lines
 - Depot node (green)
 - Complete ring path
-- All assignments (Station X → Ring Node Y)
+- All assignments (Station X assigned to Ring Node Y)
 
-## 📝 Notes
+## Notes
 
-- **Windows-only**: Uses Windows threading APIs (`_beginthreadex`, `WaitForSingleObject`, etc.)
+- **Windows-only**: Uses Windows threading APIs
 - **Depot constraint**: Node 1 is always in the ring (enforced in crossover and mutation)
 - **Memory efficient**: Stack allocation for small arrays, cost caching
 
-## 📄 License
+## License
 
-MIT License - See repository for details.
+MIT License
