@@ -4,21 +4,20 @@
 //
 #include "Mutation.h"
 #include "utils\Random.h"
+#include "utils\StackConfig.h"
 #include <stdlib.h>
 #include <string.h>
-
-#define MAX_STACK_SIZE 256
 
 void Mutation_Add_Node(Individual* ind, int total_stations, const double** dist)
 {
     if (!ind || !dist || total_stations <= 0) return;
     
     // Use stack for small arrays
-    int stack_active[MAX_STACK_SIZE];
-    int stack_inactive[MAX_STACK_SIZE];
+    int stack_active[MAX_STACK_BUFFER_SIZE];
+    int stack_inactive[MAX_STACK_BUFFER_SIZE];
     int* is_active;
     int* inactive;
-    int use_heap = (total_stations + 1 > MAX_STACK_SIZE);
+    int use_heap = (total_stations + 1 > MAX_STACK_BUFFER_SIZE);
     
     if (use_heap) {
         is_active = (int*)calloc(total_stations + 1, sizeof(int));

@@ -3,12 +3,10 @@
 // Optimized: uses stack allocation for small arrays
 
 #include "Cost.h"
+#include "utils\StackConfig.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-// Maximum stations for stack allocation (avoid malloc in hot path)
-#define MAX_STACK_STATIONS 512
 
 // =============================================================================
 // BASIC COST FUNCTIONS
@@ -63,9 +61,9 @@ double OutRingCostOnly(
     }
 
     // Use stack for small arrays, heap for large
-    int stack_buffer[MAX_STACK_STATIONS];
+    int stack_buffer[MAX_STACK_BUFFER_SIZE];
     int* is_active;
-    int use_heap = (total_stations + 1 > MAX_STACK_STATIONS);
+    int use_heap = (total_stations + 1 > MAX_STACK_BUFFER_SIZE);
     
     if (use_heap) {
         is_active = (int*)calloc(total_stations + 1, sizeof(int));

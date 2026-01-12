@@ -4,11 +4,10 @@
 //
 #include "Crossover.h"
 #include "utils\Random.h"
+#include "utils\StackConfig.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-
-#define MAX_STACK_SIZE 256
 
 int* Slice_Crossover(const int* parentA, int sizeA,
                      const int* parentB, int sizeB,
@@ -31,9 +30,9 @@ int* Slice_Crossover(const int* parentA, int sizeA,
     }
     
     // Use stack for small arrays
-    int stack_used[MAX_STACK_SIZE];
+    int stack_used[MAX_STACK_BUFFER_SIZE];
     int* used;
-    int use_heap = (max_id + 1 > MAX_STACK_SIZE);
+    int use_heap = (max_id + 1 > MAX_STACK_BUFFER_SIZE);
     
     if (use_heap) {
         used = (int*)calloc(max_id + 1, sizeof(int));

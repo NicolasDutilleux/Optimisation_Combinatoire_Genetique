@@ -47,6 +47,7 @@
     <ClInclude Include="utils\hierarchy_and_print_utils.h" />
     <ClInclude Include="utils\main_helpers.h" />
     <ClInclude Include="utils\Random.h" />
+    <ClInclude Include="utils\StackConfig.h" />
     <ClInclude Include="utils\ThreadPool.h" />
     <ClInclude Include="utils\Visualize.h" />
   </ItemGroup>
