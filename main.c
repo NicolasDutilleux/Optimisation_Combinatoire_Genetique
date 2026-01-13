@@ -21,6 +21,7 @@
 #include "utils\FileIO.h"
 #include "utils\hierarchy_and_print_utils.h"
 #include "utils\main_helpers.h"
+#include "utils\OutputWriter.h"
 
 // =============================================================================
 // HIGH-RESOLUTION TIMER
@@ -473,6 +474,13 @@ int main(int argc, char** argv)
     // -------------------------------------------------------------------------
     printf("[FINAL VISUALIZATION] Generating final result image...\n");
     Visualize_Ring(best, nodes, total_stations, final_best, alpha, gen);
+
+    // -------------------------------------------------------------------------
+    // WRITE SOLUTION TO FILE
+    // -------------------------------------------------------------------------
+    printf("\n[WRITING SOLUTION] Creating Genetic_Solution.txt...\n");
+    WriteSolutionToFile(best, total_stations, alpha, final_best, 
+                       (const int**)ranking);
 
     // -------------------------------------------------------------------------
     // STEP 8: CLEANUP

@@ -84,6 +84,9 @@
     <ClInclude Include="utils\StackConfig.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
+    <ClInclude Include="utils\OutputWriter.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="core\Individual.c">
@@ -132,6 +135,9 @@
       <Filter>Fichiers sources</Filter>
     </ClCompile>
     <ClCompile Include="utils\Visualize.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\OutputWriter.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
   </ItemGroup>
